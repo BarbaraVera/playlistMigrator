@@ -1,0 +1,22 @@
+<button
+  class="cartoony-btn relative inline-flex items-center justify-center gap-2 border-4 border-ink font-display uppercase leading-none select-none cursor-pointer transition-all duration-75 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-sky/70 disabled:cursor-not-allowed disabled:opacity-50 disabled:saturate-50 disabled:active:translate-y-0 active:shadow-none"
+  [ngClass]="variantClass() + ' ' + sizeClass()"
+  [class.w-full]="fullWidth()"
+  [type]="type()"
+  [disabled]="disabled() || loading()"
+  (click)="handleClick()"
+>
+  <span class="inline-flex items-center gap-2" [class.invisible]="loading()">
+    <ng-content select="[slot=leading]" />
+    <ng-content />
+    <ng-content select="[slot=trailing]" />
+  </span>
+  <span
+    data-test="spinner"
+    class="absolute inset-0 flex items-center justify-center transition-opacity duration-75"
+    [class.opacity-0]="!loading()"
+    [class.opacity-100]="loading()"
+  >
+    <svg lucideLoaderCircle class="animate-spin" [size]="iconSize()" aria-hidden="true" />
+  </span>
+</button>

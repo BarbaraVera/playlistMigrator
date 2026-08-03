@@ -1,0 +1,112 @@
+<section class="relative mx-auto w-full max-w-5xl px-6 py-12">
+  <svg
+    lucideMusic
+    class="absolute left-8 top-16 rotate-12 animate-float text-sky"
+    [size]="44"
+    stroke-width="2.5"
+    aria-hidden="true"
+  />
+  <svg
+    lucideHeadphones
+    class="absolute right-10 top-40 animate-float text-tangerine"
+    [size]="52"
+    stroke-width="2.5"
+    [style.animation-delay]="'0.5s'"
+    aria-hidden="true"
+  />
+  <svg
+    lucideDisc3
+    class="absolute bottom-28 left-6 animate-float text-berry"
+    [size]="48"
+    stroke-width="2.5"
+    [style.animation-delay]="'1s'"
+    aria-hidden="true"
+  />
+
+  <header class="relative z-10 mb-12 text-center">
+    <h1 class="game-title-shadow text-stroke font-display text-5xl uppercase leading-none tracking-wide text-white md:text-7xl">
+      ¡Conecta tus cuentas!
+    </h1>
+    <p class="mx-auto mt-5 max-w-xl text-lg font-medium text-ink/70">
+      Para migrar tus playlists de Spotify a YouTube Music, primero conecta ambas plataformas.
+    </p>
+    <div class="mt-6 flex items-center justify-center">
+      <app-cartoony-badge [status]="allConnected() ? 'success' : 'info'">
+        {{ connectedCount() }} de {{ cards.length }} conectadas
+      </app-cartoony-badge>
+    </div>
+  </header>
+
+  <div class="relative z-10 grid gap-8 md:grid-cols-2">
+    @for (card of cards; track card.id) {
+      <app-cartoony-card [title]="card.name" [elevated]="true" [hoverable]="true">
+        <div slot="actions">
+          <app-cartoony-badge
+            [status]="badgeStatus(stateOf(card.id).status)"
+            [pulse]="isConnecting(stateOf(card.id).status)"
+          >
+            {{ statusLabels[stateOf(card.id).status] }}
+          </app-cartoony-badge>
+        </div>
+
+        <div class="flex flex-col items-center gap-5 py-4 text-center">
+          <div class="grid h-28 w-28 place-items-center rounded-full border-4 border-ink bg-white shadow-game-md">
+            @if (card.id === 'spotify') {
+              <app-spotify-logo class="text-[#1DB954]" [size]="64" />
+            } @else {
+              <app-youtube-music-logo class="text-[#FF0000]" [size]="64" />
+            }
+          </div>
+
+          <p class="min-h-12 max-w-xs text-base leading-relaxed text-ink/70">
+            {{ card.description }}
+          </p>
+
+          @if (stateOf(card.id).profile; as profile) {
+            <p class="rounded-full border-2 border-ink bg-cream px-4 py-1 font-display text-sm uppercase tracking-wide">
+              {{ profile.displayName }}
+            </p>
+          }
+
+          @if (stateOf(card.id).status === 'error') {
+            <p class="max-w-xs text-sm font-semibold text-berry">
+              {{ stateOf(card.id).error }}
+            </p>
+          }
+
+          <div class="w-full">
+            <app-cartoony-button
+              [fullWidth]="true"
+              [variant]="isConnected(stateOf(card.id).status) ? 'neutral' : 'primary'"
+              [loading]="isConnecting(stateOf(card.id).status)"
+              (clicked)="onAction(card.id)"
+            >
+              {{ actionLabels[stateOf(card.id).status] }}
+            </app-cartoony-button>
+          </div>
+        </div>
+      </app-cartoony-card>
+    }
+  </div>
+
+  @if (allConnected()) {
+    <footer class="relative z-10 mt-10">
+      <div
+        class="flex flex-col items-center gap-3 rounded-3xl border-4 border-ink bg-cream/95 p-6 text-center shadow-game-md backdrop-blur"
+      >
+        <p class="font-display text-lg uppercase tracking-wide text-ink/70">
+          ¡Las dos cuentas están conectadas!
+        </p>
+        <app-cartoony-button
+          variant="primary"
+          size="lg"
+          data-test="continue-button"
+          (clicked)="goToPlaylistSelection()"
+        >
+          <svg lucideArrowRight [size]="24" slot="leading" aria-hidden="true" />
+          ¡Continuar a seleccionar playlists!
+        </app-cartoony-button>
+      </div>
+    </footer>
+  }
+</section>

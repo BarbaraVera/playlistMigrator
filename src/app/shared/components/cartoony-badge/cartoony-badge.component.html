@@ -1,0 +1,11 @@
+<span
+  class="inline-flex items-center gap-2 rounded-full border-4 border-ink px-4 py-1 font-display text-sm uppercase tracking-wider shadow-game-xs"
+  [ngClass]="statusClasses[status()]"
+>
+  <span
+    class="badge-dot h-3 w-3 shrink-0 rounded-full border-2 border-ink"
+    [style.--badge-color]="statusColors[status()]"
+    [class.animate-pulse]="pulse()"
+  ></span>
+  <ng-content />
+</span>

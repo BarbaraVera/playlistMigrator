@@ -1,0 +1,182 @@
+<div class="relative mx-auto flex min-h-screen w-full max-w-5xl flex-col gap-10 px-6 py-10 sm:px-8">
+  <svg
+    lucideGamepad2
+    class="absolute -top-2 right-8 animate-float text-ink/20"
+    [size]="72"
+    aria-hidden="true"
+  />
+  <svg
+    lucideStar
+    class="absolute left-6 top-32 animate-wiggle text-sun"
+    [size]="36"
+    fill="currentColor"
+    aria-hidden="true"
+  />
+  <svg
+    lucideMusic2
+    class="absolute right-10 top-64 animate-float text-berry/70"
+    [size]="44"
+    fill="currentColor"
+    aria-hidden="true"
+  />
+
+  <header class="relative z-10 text-center">
+    <p class="mb-2 inline-flex items-center gap-2 font-display text-sm uppercase tracking-widest text-ink/60">
+      <svg lucideDisc3 [size]="18" aria-hidden="true" />
+      UI Kit v1
+    </p>
+    <h1
+      class="game-title-shadow font-display text-5xl uppercase leading-none tracking-wide sm:text-7xl"
+    >
+      Playlist Migrator
+    </h1>
+    <p class="mx-auto mt-4 max-w-xl text-lg font-medium text-ink/70">
+      Convierte tus playlists de Spotify a YouTube Music con estilo de arcade. Este es el
+      sandbox visual del <span class="font-bold text-berry">UI Kit Cartoony</span>.
+    </p>
+  </header>
+
+  <!-- Botones -->
+  <section class="relative z-10">
+    <app-cartoony-card title="Botones 3D" variant="accent">
+      <div class="flex flex-wrap items-center gap-4">
+        <app-cartoony-button variant="primary" size="lg" (clicked)="startMigration()">
+          <svg lucidePlay [size]="24" slot="leading" fill="currentColor" />
+          Empezar migración
+        </app-cartoony-button>
+        <app-cartoony-button variant="secondary">
+          <svg lucideListMusic [size]="20" slot="leading" />
+          Ver playlists
+        </app-cartoony-button>
+        <app-cartoony-button variant="success">
+          <svg lucideCheck [size]="20" slot="leading" stroke-width="3" />
+          Hecho
+        </app-cartoony-button>
+        <app-cartoony-button variant="danger">
+          <svg lucideWand [size]="20" slot="leading" />
+          Cancelar
+        </app-cartoony-button>
+        <app-cartoony-button variant="neutral">
+          <svg lucideSparkles [size]="20" slot="leading" />
+          Neutral
+        </app-cartoony-button>
+      </div>
+
+      <div class="mt-6 flex flex-wrap items-center gap-4">
+        <app-cartoony-button size="sm">Pequeño</app-cartoony-button>
+        <app-cartoony-button size="md">Mediano</app-cartoony-button>
+        <app-cartoony-button size="lg">Grande</app-cartoony-button>
+        <app-cartoony-button [loading]="true">Cargando</app-cartoony-button>
+        <app-cartoony-button [disabled]="true">Deshabilitado</app-cartoony-button>
+      </div>
+    </app-cartoony-card>
+  </section>
+
+  <!-- Badges -->
+  <section class="relative z-10">
+    <app-cartoony-card title="Badges de estado">
+      <div class="flex flex-wrap items-center gap-4">
+        <app-cartoony-badge status="success" [pulse]="true">Migrado</app-cartoony-badge>
+        <app-cartoony-badge status="warning" [pulse]="true">En cola</app-cartoony-badge>
+        <app-cartoony-badge status="error">Error</app-cartoony-badge>
+        <app-cartoony-badge status="info">Conectando</app-cartoony-badge>
+        <app-cartoony-badge status="neutral">Nuevo</app-cartoony-badge>
+      </div>
+    </app-cartoony-card>
+  </section>
+
+  <!-- Cards -->
+  <section class="relative z-10 grid gap-6 sm:grid-cols-2">
+    <app-cartoony-card title="Variant pop" variant="pop" [hoverable]="true">
+      <p class="font-medium">
+        Tarjeta destacada en amarillo sol con elevación al pasar el ratón.
+      </p>
+      <div class="mt-4">
+        <app-cartoony-button variant="neutral" size="sm">¡A jugar!</app-cartoony-button>
+      </div>
+    </app-cartoony-card>
+
+    <app-cartoony-card title="Variant accent" variant="accent" [hoverable]="true">
+      <p class="font-medium">
+        Tarjeta azul celeste para pasos de conexión o información del sistema.
+      </p>
+    </app-cartoony-card>
+  </section>
+
+  <!-- Progreso + Spinner -->
+  <section class="relative z-10">
+    <app-cartoony-card title="Barras de progreso" [elevated]="true">
+      <div class="mb-6">
+        <app-cartoony-progress-bar [progress]="progress()" [status]="progressStatus()">
+          Migración Spotify → YouTube Music
+        </app-cartoony-progress-bar>
+      </div>
+
+      <div class="grid gap-6 sm:grid-cols-3">
+        <div>
+          <p class="mb-2 font-display text-sm uppercase tracking-wide text-ink/60">En marcha</p>
+          <app-cartoony-progress-bar [progress]="60" status="running" [showLabel]="false">
+            Corriendo
+          </app-cartoony-progress-bar>
+        </div>
+        <div>
+          <p class="mb-2 font-display text-sm uppercase tracking-wide text-ink/60">Éxito</p>
+          <app-cartoony-progress-bar [progress]="100" status="success" [showLabel]="false">
+            Completa
+          </app-cartoony-progress-bar>
+        </div>
+        <div>
+          <p class="mb-2 font-display text-sm uppercase tracking-wide text-ink/60">Error</p>
+          <app-cartoony-progress-bar [progress]="34" status="error" [showLabel]="false">
+            Falló
+          </app-cartoony-progress-bar>
+        </div>
+      </div>
+
+      <div class="mt-8 flex flex-wrap items-center gap-10">
+        <app-cartoony-spinner size="sm" label="Buscando" />
+        <app-cartoony-spinner size="md" label="Migrando" />
+        <app-cartoony-spinner size="lg" label="Nivel cargando" />
+      </div>
+    </app-cartoony-card>
+  </section>
+
+  <!-- Modal -->
+  <section class="relative z-10">
+    <app-cartoony-card title="Modal de juego">
+      <div class="flex items-center gap-4">
+        <app-cartoony-button variant="primary" (clicked)="toggleModal()">
+          <svg lucideArrowRight [size]="20" slot="leading" />
+          Abrir modal
+        </app-cartoony-button>
+        <app-cartoony-button variant="neutral" size="sm" (clicked)="toggleModal()">
+          Alternar
+        </app-cartoony-button>
+      </div>
+    </app-cartoony-card>
+  </section>
+
+  <footer class="relative z-10 mt-auto text-center text-sm font-medium text-ink/50">
+    Playlist Migrator — UI Kit Cartoony / Game GUI
+  </footer>
+
+  <app-cartoony-modal [open]="modalOpen()" title="¡Nivel completado!" width="sm" (closed)="toggleModal()">
+    <div class="flex flex-col items-center gap-4 text-center">
+      <svg
+        lucidePartyPopper
+        class="text-sun"
+        [size]="64"
+        stroke-width="2.5"
+        aria-hidden="true"
+      />
+      <p class="text-lg font-medium">
+        Tu playlist <span class="font-bold text-berry">Rock Clásico</span> se migró a YouTube
+        Music. ¡Sigue así, campeón!
+      </p>
+      <app-cartoony-button variant="success" size="md" (clicked)="toggleModal()">
+        <svg lucideCheck [size]="20" slot="leading" stroke-width="3" />
+        ¡Genial!
+      </app-cartoony-button>
+    </div>
+  </app-cartoony-modal>
+</div>

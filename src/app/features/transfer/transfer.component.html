@@ -1,0 +1,213 @@
+<section class="relative mx-auto flex min-h-screen w-full max-w-5xl flex-col px-6 py-12">
+  <header class="relative z-10 mb-10 text-center">
+    <p class="mb-2 inline-flex items-center justify-center gap-2 font-display text-sm uppercase tracking-widest text-ink/60">
+      <svg lucideMusic2 [size]="18" aria-hidden="true" />
+      Paso 3 · Transferencia
+    </p>
+    <h1 class="game-title-shadow text-stroke font-display text-4xl uppercase leading-none tracking-wide text-white sm:text-6xl">
+      ¡A Migrar!
+    </h1>
+    <div class="mt-6 flex flex-wrap items-center justify-center gap-2">
+      <app-cartoony-badge [status]="states().spotify.status === 'connected' ? 'success' : 'error'">
+        Spotify
+      </app-cartoony-badge>
+      <svg lucideArrowRight class="text-ink/50" [size]="20" aria-hidden="true" />
+      <app-cartoony-badge [status]="states()['youtube-music'].status === 'connected' ? 'success' : 'error'">
+        YouTube Music
+      </app-cartoony-badge>
+    </div>
+  </header>
+
+  @if (status() === 'idle' || isInProgress()) {
+    <div class="relative z-10 flex flex-col gap-8">
+      <app-cartoony-card [title]="'Progreso general'" [elevated]="true">
+        <div class="mb-4 flex items-center justify-between gap-3">
+          <p class="truncate font-display text-xl uppercase">
+            @if (currentPlaylist(); as playlist) {
+              {{ playlist.title }}
+            } @else {
+              Preparando…
+            }
+          </p>
+          <span class="shrink-0 font-display text-sm uppercase text-ink/50">
+            {{ formatElapsed(summary().elapsedMs) }}
+          </span>
+        </div>
+        <app-cartoony-progress-bar
+          [progress]="percent()"
+          [status]="isInProgress() ? 'running' : 'idle'"
+          size="lg"
+        >
+          Migrando canciones
+        </app-cartoony-progress-bar>
+        <p class="mt-2 text-sm text-ink/60">
+          {{ summary().processedTracks }} de {{ totalTracks() }} canciones · {{ percent() }}%
+        </p>
+      </app-cartoony-card>
+
+      @if (playlistRuns().length > 0) {
+        <app-cartoony-card [title]="'Playlists en proceso'">
+          <div class="flex flex-col gap-4">
+            @for (run of playlistRuns(); track run.playlistId) {
+              <div
+                class="flex items-center gap-4 rounded-2xl border-4 border-ink bg-white p-3"
+                [class.is-active]="currentPlaylistId() === run.playlistId"
+              >
+                <img
+                  [src]="run.coverUrl"
+                  [alt]="'Portada de ' + run.title"
+                  class="h-16 w-16 shrink-0 rounded-xl border-2 border-ink object-cover"
+                />
+                <div class="min-w-0 flex-1">
+                  <p class="truncate font-display text-lg uppercase leading-tight">{{ run.title }}</p>
+                  <p class="text-sm text-ink/60">{{ run.processedTracks }} / {{ run.totalTracks }} canciones</p>
+                  <div class="mt-2 h-3 w-full overflow-hidden rounded-full border-2 border-ink bg-white">
+                    <div
+                      class="h-full bg-grass transition-all duration-200"
+                      [style.width.%]="playlistPercent(run)"
+                    ></div>
+                  </div>
+                  <div class="mt-2 flex flex-wrap items-center gap-2">
+                    <app-cartoony-badge
+                      [status]="runStatusBadge(run)"
+                      [pulse]="run.status === 'running'"
+                    >
+                      {{ runStatusLabel(run) }}
+                    </app-cartoony-badge>
+                    <app-cartoony-badge [status]="run.warningCount > 0 ? 'warning' : 'success'">
+                      {{ run.warningCount > 0 ? run.warningCount + ' avisos' : 'Sin avisos' }}
+                    </app-cartoony-badge>
+                  </div>
+                </div>
+              </div>
+            }
+          </div>
+        </app-cartoony-card>
+      }
+
+      <app-cartoony-card [title]="'Registro de actividad'">
+        @if (log().length === 0) {
+          <p class="text-sm text-ink/50">Esperando la primera canción…</p>
+        } @else {
+          <ul class="flex max-h-56 flex-col gap-1 overflow-y-auto pr-1">
+            @for (entry of log(); track entry.trackId; let last = $last) {
+              <li
+                class="flex items-center gap-2 rounded-xl border-2 border-ink/10 bg-cream/60 px-3 py-2 text-sm"
+                [class.log-latest]="last"
+              >
+                @if (entry.result === 'success') {
+                  <svg lucideCircleCheck class="shrink-0 text-grass" [size]="18" aria-hidden="true" />
+                } @else {
+                  <svg lucideTriangleAlert class="shrink-0 text-tangerine" [size]="18" aria-hidden="true" />
+                }
+                <span class="min-w-0 flex-1 truncate">
+                  <span class="font-semibold">{{ entry.playlistTitle }}</span> · {{ entry.trackTitle }}
+                </span>
+                <app-cartoony-badge [status]="entry.result === 'success' ? 'success' : 'warning'">
+                  {{ resultLabel(entry.result) }}
+                </app-cartoony-badge>
+              </li>
+            }
+          </ul>
+        }
+      </app-cartoony-card>
+
+      <div
+        class="sticky bottom-4 z-20 flex flex-wrap items-center justify-center gap-4 rounded-3xl border-4 border-ink bg-cream/95 p-4 shadow-game-md backdrop-blur"
+      >
+        <app-cartoony-button variant="neutral" size="md" data-test="pause-button" (clicked)="togglePause()">
+          <svg lucidePlay [size]="20" slot="leading" aria-hidden="true" [class.hidden]="!paused()" />
+          <svg lucidePause [size]="20" slot="leading" aria-hidden="true" [class.hidden]="paused()" />
+          @if (paused()) {
+            Reanudar
+          } @else {
+            Pausar
+          }
+        </app-cartoony-button>
+        <app-cartoony-button variant="danger" size="md" data-test="cancel-button" (clicked)="cancel()">
+          <svg lucideSquare [size]="20" slot="leading" aria-hidden="true" />
+          Cancelar transferencia
+        </app-cartoony-button>
+      </div>
+    </div>
+  } @else if (isCompleted()) {
+    <section class="relative z-10 rounded-3xl border-4 border-ink bg-white p-8 text-center shadow-game-lg">
+      <svg
+        lucidePartyPopper
+        class="mx-auto animate-wiggle text-sun"
+        [size]="72"
+        stroke-width="2.5"
+        aria-hidden="true"
+      />
+      <h2
+        class="game-title-shadow text-stroke mt-4 font-display text-4xl uppercase leading-none tracking-wide text-white sm:text-6xl"
+      >
+        ¡Mission Complete!
+      </h2>
+      <p class="mt-3 font-display text-xl uppercase tracking-wide text-ink/70">You got it!</p>
+      <p class="mx-auto mt-2 max-w-lg font-medium text-ink/70">
+        Migraste {{ summary().successfulTracks }} canciones de {{ summary().totalPlaylists }}
+        playlists a YouTube Music.
+      </p>
+
+      <div class="mx-auto mt-8 grid max-w-2xl grid-cols-2 gap-4 sm:grid-cols-4">
+        <div class="rounded-2xl border-4 border-ink bg-sun p-4 shadow-game-xs">
+          <p class="font-display text-3xl tabular-nums">{{ summary().totalPlaylists }}</p>
+          <p class="font-display text-xs uppercase tracking-wider">Playlists</p>
+        </div>
+        <div class="rounded-2xl border-4 border-ink bg-sky p-4 shadow-game-xs">
+          <p class="font-display text-3xl tabular-nums">{{ summary().processedTracks }}</p>
+          <p class="font-display text-xs uppercase tracking-wider">Canciones</p>
+        </div>
+        <div class="rounded-2xl border-4 border-ink bg-grass p-4 shadow-game-xs">
+          <p class="font-display text-3xl tabular-nums">{{ summary().successfulTracks }}</p>
+          <p class="font-display text-xs uppercase tracking-wider">Éxitos</p>
+        </div>
+        <div class="rounded-2xl border-4 border-ink bg-tangerine p-4 shadow-game-xs">
+          <p class="font-display text-3xl tabular-nums">{{ summary().failedTracks }}</p>
+          <p class="font-display text-xs uppercase tracking-wider">Avisos</p>
+        </div>
+      </div>
+
+      <p class="mt-4 text-sm text-ink/50">Tiempo total: {{ formatElapsed(summary().elapsedMs) }}</p>
+
+      <div class="mt-8 flex flex-wrap items-center justify-center gap-4">
+        <app-cartoony-button variant="primary" size="lg" data-test="yt-button" (clicked)="goToYoutubeMusic()">
+          <svg lucideExternalLink [size]="24" slot="leading" aria-hidden="true" />
+          Ir a YouTube Music
+        </app-cartoony-button>
+        <app-cartoony-button variant="secondary" size="lg" data-test="migrate-button" (clicked)="migrateMore()">
+          <svg lucideRotateCcw [size]="24" slot="leading" aria-hidden="true" />
+          Migrar más playlists
+        </app-cartoony-button>
+      </div>
+    </section>
+  } @else if (isCancelled()) {
+    <section class="relative z-10 rounded-3xl border-4 border-ink bg-white p-8 text-center shadow-game-lg">
+      <svg lucideSquare class="mx-auto text-berry" [size]="64" stroke-width="2.5" aria-hidden="true" />
+      <h2 class="mt-4 font-display text-3xl uppercase tracking-wide text-berry">
+        Transferencia cancelada
+      </h2>
+      <p class="mx-auto mt-2 max-w-md font-medium text-ink/70">
+        Se procesaron {{ summary().processedTracks }} canciones de {{ totalTracks() }} antes de
+        cancelar.
+      </p>
+      <div class="mt-8">
+        <app-cartoony-button variant="secondary" data-test="back-button" (clicked)="goBackToSelection()">
+          <svg lucideRotateCcw [size]="20" slot="leading" aria-hidden="true" />
+          Volver a selección
+        </app-cartoony-button>
+      </div>
+    </section>
+  } @else {
+    <section class="relative z-10 rounded-3xl border-4 border-ink bg-white p-8 text-center shadow-game-lg">
+      <h2 class="font-display text-3xl uppercase tracking-wide text-berry">Algo salió mal</h2>
+      <p class="mx-auto mt-2 max-w-md font-medium text-ink/70">Intenta de nuevo desde la selección.</p>
+      <div class="mt-8">
+        <app-cartoony-button variant="secondary" (clicked)="goBackToSelection()">
+          Volver a selección
+        </app-cartoony-button>
+      </div>
+    </section>
+  }
+</section>

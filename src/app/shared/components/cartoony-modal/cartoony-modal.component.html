@@ -1,0 +1,39 @@
+@if (open()) {
+  <div class="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto p-4">
+    <button
+      type="button"
+      aria-label="Cerrar"
+      class="absolute inset-0 block h-full w-full cursor-pointer bg-ink/70 backdrop-blur-sm animate-pop-in"
+      (click)="onBackdropClick()"
+    ></button>
+
+    <section
+      role="dialog"
+      aria-modal="true"
+      tabindex="-1"
+      [attr.aria-labelledby]="title() ? 'cartoony-modal-title' : null"
+      class="relative z-10 w-full rounded-3xl border-4 border-ink bg-white shadow-game-lg animate-bounce-in"
+      [ngClass]="widthClasses[width()]"
+    >
+      <header class="flex items-center justify-between gap-4 border-b-4 border-ink/10 px-6 py-4">
+        <h2 id="cartoony-modal-title" class="font-display text-2xl uppercase tracking-wide">
+          {{ title() }}
+        </h2>
+        @if (closable()) {
+          <button
+            type="button"
+            class="grid h-11 w-11 shrink-0 cursor-pointer place-items-center rounded-xl border-4 border-ink bg-berry text-white shadow-game-xs transition-all duration-75 hover:brightness-105 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-sky/70 active:translate-y-[3px] active:shadow-none"
+            aria-label="Cerrar"
+            (click)="close()"
+          >
+            <svg lucideX [size]="22" [strokeWidth]="3" />
+          </button>
+        }
+      </header>
+
+      <div class="max-h-[65vh] overflow-y-auto px-6 py-6">
+        <ng-content />
+      </div>
+    </section>
+  </div>
+}

@@ -1,0 +1,13 @@
+<div class="flex flex-col items-center gap-3">
+  <div
+    class="cartoony-spinner animate-spin"
+    [ngClass]="sizeClasses[size()]"
+    role="status"
+    aria-label="Cargando"
+  >
+    <span class="sr-only">Cargando</span>
+  </div>
+  @if (label()) {
+    <span class="font-display text-sm uppercase tracking-wide">{{ label() }}</span>
+  }
+</div>

@@ -1,0 +1,7 @@
+:host {
+  display: inline-block;
+}
+
+.badge-dot {
+  background: color-mix(in srgb, var(--badge-color, var(--color-ink)) 55%, var(--color-ink));
+}

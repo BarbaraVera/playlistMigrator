@@ -1,0 +1,31 @@
+<div class="w-full">
+  <div class="mb-2 flex items-center justify-between gap-3 font-display text-lg uppercase leading-none">
+    <span class="truncate"><ng-content /></span>
+    <span class="flex shrink-0 items-center gap-2">
+      @if (showLabel()) {
+        <span class="tabular-nums">{{ clamped() }}%</span>
+      }
+      @if (status() === 'success') {
+        <svg lucideCheck class="text-grass" [size]="18" aria-hidden="true" />
+      }
+      @if (status() === 'error') {
+        <svg lucideTriangleAlert class="text-berry" [size]="18" aria-hidden="true" />
+      }
+    </span>
+  </div>
+
+  <div
+    class="w-full overflow-hidden rounded-full border-4 border-ink bg-white"
+    [ngClass]="trackHeightClasses[size()]"
+    role="progressbar"
+    aria-valuemin="0"
+    aria-valuemax="100"
+    [attr.aria-valuenow]="clamped()"
+  >
+    <div
+      class="h-full rounded-full transition-[width] duration-300 ease-out"
+      [ngClass]="fillClasses[status()]"
+      [style.width.%]="clamped()"
+    ></div>
+  </div>
+</div>

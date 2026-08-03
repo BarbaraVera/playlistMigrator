@@ -1,0 +1,11 @@
+<article class="relative" [ngClass]="classes()">
+  @if (title()) {
+    <header class="flex items-center justify-between gap-3 border-b-4 border-ink/10 px-6 py-4">
+      <h3 class="font-display text-xl uppercase tracking-wide">{{ title() }}</h3>
+      <ng-content select="[slot=actions]" />
+    </header>
+  }
+  <div class="px-6 py-6">
+    <ng-content />
+  </div>
+</article>
