@@ -16,6 +16,7 @@ import {
   LucideWand,
 } from '@lucide/angular';
 
+import { BackHomeComponent } from '../../shared/components/back-home/back-home.component';
 import { CartoonyBadgeComponent } from '../../shared/components/cartoony-badge/cartoony-badge.component';
 import { CartoonyButtonComponent } from '../../shared/components/cartoony-button/cartoony-button.component';
 import { CartoonyCardComponent } from '../../shared/components/cartoony-card/cartoony-card.component';
@@ -30,6 +31,7 @@ import type { CartoonyProgressStatus } from '../../shared/components/cartoony-pr
   templateUrl: './ui-kit-demo.component.html',
   styleUrl: './ui-kit-demo.component.scss',
   imports: [
+    BackHomeComponent,
     CartoonyButtonComponent,
     CartoonyCardComponent,
     CartoonyBadgeComponent,

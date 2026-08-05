@@ -3,7 +3,7 @@
     <button
       type="button"
       aria-label="Cerrar"
-      class="absolute inset-0 block h-full w-full cursor-pointer bg-ink/70 backdrop-blur-sm animate-pop-in"
+      class="absolute inset-0 block h-full w-full cursor-pointer bg-outline/70 backdrop-blur-sm animate-pop-in"
       (click)="onBackdropClick()"
     ></button>
 
@@ -12,7 +12,7 @@
       aria-modal="true"
       tabindex="-1"
       [attr.aria-labelledby]="title() ? 'cartoony-modal-title' : null"
-      class="relative z-10 w-full rounded-3xl border-4 border-ink bg-white shadow-game-lg animate-bounce-in"
+      class="relative z-10 w-full rounded-3xl border-4 border-ink bg-surface shadow-game-lg animate-bounce-in"
       [ngClass]="widthClasses[width()]"
     >
       <header class="flex items-center justify-between gap-4 border-b-4 border-ink/10 px-6 py-4">

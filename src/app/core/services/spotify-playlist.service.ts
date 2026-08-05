@@ -1,6 +1,26 @@
-import { Injectable } from '@angular/core';
+import { HttpClient } from '@angular/common/http';
+import { inject, Injectable } from '@angular/core';
+import { firstValueFrom } from 'rxjs';
 
-import { Playlist } from '../models/playlist';
+import { getBackendBaseUrl } from '../http/backend-url';
+import { Playlist, Track } from '../models/playlist';
+
+interface SpotifyPlaylistDto {
+  id: string;
+  name: string;
+  cover_url: string | null;
+  track_count: number;
+  owner: string;
+  migratable: boolean;
+  description: string | null;
+}
+
+interface SpotifyTrackDto {
+  id: string | null;
+  name: string;
+  artist: string;
+  duration_ms: number | null;
+}
 
 function coverSvg(from: string, to: string, emoji: string): string {
   const svg =
@@ -14,91 +34,44 @@ function coverSvg(from: string, to: string, emoji: string): string {
   return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
 }
 
-const MOCK_SPOTIFY_PLAYLISTS: readonly Playlist[] = [
-  {
-    id: 'pl-rock-clasico',
-    title: 'Rock Clásico',
-    coverUrl: coverSvg('#ff4d6d', '#ff8f3f', '🎸'),
-    trackCount: 42,
-    owner: 'Camaleón Musical',
-    platform: 'spotify',
-    description: 'Los himnos del rock que nunca mueren.',
-  },
-  {
-    id: 'pl-gym-power',
-    title: 'Gym Power',
-    coverUrl: coverSvg('#4cc9f0', '#4361ee', '💪'),
-    trackCount: 35,
-    owner: 'Camaleón Musical',
-    platform: 'spotify',
-    description: 'Energía pura para tus series.',
-  },
-  {
-    id: 'pl-chill-tarde',
-    title: 'Chill de Tarde',
-    coverUrl: coverSvg('#ffc93c', '#ff8f3f', '🌇'),
-    trackCount: 28,
-    owner: 'Melómano Playlists',
-    platform: 'spotify',
-    description: 'Temperatura ambiente para el atardecer.',
-  },
-  {
-    id: 'pl-roadtrip-2026',
-    title: 'Roadtrip 2026',
-    coverUrl: coverSvg('#35c99e', '#4361ee', '🚗'),
-    trackCount: 51,
-    owner: 'Melómano Playlists',
-    platform: 'spotify',
-    description: 'Para la ruta, la ventanilla y el volumen alto.',
-  },
-  {
-    id: 'pl-fiesta-latina',
-    title: 'Fiesta Latina',
-    coverUrl: coverSvg('#ff4d6d', '#ffc93c', '🎉'),
-    trackCount: 47,
-    owner: 'DJ Chispa',
-    platform: 'spotify',
-    description: 'Ritmo que no deja a nadie sentado.',
-  },
-  {
-    id: 'pl-lofi-programar',
-    title: 'Lo-fi para Programar',
-    coverUrl: coverSvg('#141414', '#4cc9f0', '🧋'),
-    trackCount: 64,
-    owner: 'Byte & Beat',
-    platform: 'spotify',
-    description: 'Focus mode activado.',
-  },
-  {
-    id: 'pl-nostalgia-2000',
-    title: 'Nostalgia 2000',
-    coverUrl: coverSvg('#ff8f3f', '#ff4d6d', '📼'),
-    trackCount: 33,
-    owner: 'DJ Chispa',
-    platform: 'spotify',
-    description: 'Ponte los audífonos con cable y revive el 2000.',
-  },
-  {
-    id: 'pl-duermete-bebe',
-    title: 'Dúrmete, Bebé',
-    coverUrl: coverSvg('#4361ee', '#141414', '🌙'),
-    trackCount: 19,
-    owner: 'Camaleón Musical',
-    platform: 'spotify',
-    description: 'Canciones de cuna con un toque retro.',
-  },
-];
-
 @Injectable({ providedIn: 'root' })
 export class SpotifyPlaylistService {
-  private readonly delayMs = 900;
+  private readonly http = inject(HttpClient);
+  readonly baseUrl = getBackendBaseUrl();
 
   async list(): Promise<readonly Playlist[]> {
-    await delay(this.delayMs);
-    return MOCK_SPOTIFY_PLAYLISTS;
+    const items = await firstValueFrom(
+      this.http.get<SpotifyPlaylistDto[]>(`${this.baseUrl}/api/spotify/playlists`, {
+        withCredentials: true,
+      }),
+    );
+    return items.map((item) => this.toPlaylist(item));
   }
-}
 
-function delay(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
+  private toPlaylist(item: SpotifyPlaylistDto): Playlist {
+    return {
+      id: item.id,
+      title: item.name,
+      coverUrl: item.cover_url ?? coverSvg('#4361ee', '#4cc9f0', '🎵'),
+      trackCount: item.track_count,
+      owner: item.owner,
+      migratable: item.migratable,
+      platform: 'spotify',
+      description: item.description ?? undefined,
+    };
+  }
+
+  async listTracks(playlistId: string): Promise<readonly Track[]> {
+    const items = await firstValueFrom(
+      this.http.get<SpotifyTrackDto[]>(`${this.baseUrl}/api/spotify/playlists/${playlistId}/tracks`, {
+        withCredentials: true,
+      }),
+    );
+    return items.map((item) => ({
+      id: item.id ?? '',
+      title: item.name,
+      artist: item.artist,
+      durationMs: item.duration_ms ?? undefined,
+    }));
+  }
 }

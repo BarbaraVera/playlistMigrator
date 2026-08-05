@@ -1,42 +1,37 @@
+import { HttpErrorResponse } from '@angular/common/http';
 import { computed, inject, Injectable, signal } from '@angular/core';
+import { Subscription } from 'rxjs';
 
-import { PlaylistSelectionService } from './playlist-selection.service';
 import {
-  ItemTransferProgress,
-  ItemTransferResult,
   PlaylistRun,
-  TransferLogEntry,
+  TransferProgress,
+  TransferResponse,
   TransferStatus,
   TransferSummary,
 } from '../models/transfer';
+import { PlaylistSelectionService } from './playlist-selection.service';
+import { TransferService } from './transfer.service';
 
-const MAX_LOG_ENTRIES = 50;
-const TRACK_DELAY_MS = 60;
-const PLAYLIST_DELAY_MS = 250;
+export const PROGRESS_POLL_INTERVAL_MS = 1000;
 
 @Injectable({ providedIn: 'root' })
 export class TransferRunnerService {
   private readonly selection = inject(PlaylistSelectionService);
+  private readonly transfer = inject(TransferService);
+
+  private subscription: Subscription | null = null;
+  private progressTimer: ReturnType<typeof setInterval> | null = null;
 
   private readonly statusSignal = signal<TransferStatus>('idle');
   private readonly playlistRunsSignal = signal<readonly PlaylistRun[]>([]);
-  private readonly itemsSignal = signal<readonly ItemTransferProgress[]>([]);
-  private readonly logSignal = signal<readonly TransferLogEntry[]>([]);
-  private readonly currentPlaylistIdSignal = signal<string | null>(null);
   private readonly startedAtSignal = signal<number | null>(null);
   private readonly finishedAtSignal = signal<number | null>(null);
-  private readonly pausedSignal = signal(false);
-
-  private abort = false;
-  private isPaused = false;
-  private resumeWaiters: (() => void)[] = [];
+  private readonly errorMessageSignal = signal<string | null>(null);
+  private readonly nowSignal = signal(Date.now());
 
   readonly status = this.statusSignal.asReadonly();
   readonly playlistRuns = this.playlistRunsSignal.asReadonly();
-  readonly items = this.itemsSignal.asReadonly();
-  readonly log = this.logSignal.asReadonly();
-  readonly currentPlaylistId = this.currentPlaylistIdSignal.asReadonly();
-  readonly paused = this.pausedSignal.asReadonly();
+  readonly errorMessage = this.errorMessageSignal.asReadonly();
 
   readonly totalTracks = computed(() => {
     return this.playlistRunsSignal().reduce((sum, run) => sum + run.totalTracks, 0);
@@ -56,6 +51,7 @@ export class TransferRunnerService {
     if (startedAt === null) {
       return 0;
     }
+    this.nowSignal();
     const end = this.finishedAtSignal() ?? Date.now();
     return Math.max(0, end - startedAt);
   });
@@ -71,11 +67,6 @@ export class TransferRunnerService {
       failedTracks: processedTracks - successfulTracks,
       elapsedMs: this.elapsedMs(),
     };
-  });
-
-  readonly currentPlaylist = computed(() => {
-    const id = this.currentPlaylistIdSignal();
-    return this.playlistRunsSignal().find((run) => run.playlistId === id) ?? null;
   });
 
   start(): void {
@@ -99,184 +90,116 @@ export class TransferRunnerService {
       status: 'pending',
     }));
 
-    this.abort = false;
-    this.isPaused = false;
-    this.pausedSignal.set(false);
-    this.resumeWaiters = [];
     this.statusSignal.set('in_progress');
     this.playlistRunsSignal.set(runs);
-    this.itemsSignal.set([]);
-    this.logSignal.set([]);
-    this.currentPlaylistIdSignal.set(null);
     this.startedAtSignal.set(Date.now());
     this.finishedAtSignal.set(null);
+    this.startProgressPolling();
 
-    void this.run(runs);
-  }
-
-  pause(): void {
-    this.isPaused = true;
-    this.pausedSignal.set(true);
-  }
-
-  resume(): void {
-    if (!this.isPaused) {
-      return;
-    }
-    this.isPaused = false;
-    this.pausedSignal.set(false);
-    const waiters = this.resumeWaiters;
-    this.resumeWaiters = [];
-    for (const resolve of waiters) {
-      resolve();
-    }
+    const playlistIds = selected.map((playlist) => playlist.id);
+    this.subscription?.unsubscribe();
+    this.subscription = this.transfer.migrate(playlistIds).subscribe({
+      next: (result) => this.complete(result),
+      error: (error) => this.fail(error),
+    });
   }
 
   cancel(): void {
     if (this.statusSignal() !== 'in_progress') {
       return;
     }
-    this.abort = true;
-    this.isPaused = false;
-    this.pausedSignal.set(false);
-    const waiters = this.resumeWaiters;
-    this.resumeWaiters = [];
-    for (const resolve of waiters) {
-      resolve();
-    }
+    this.stopProgressPolling();
+    this.subscription?.unsubscribe();
+    this.subscription = null;
+    this.finishedAtSignal.set(Date.now());
+    this.statusSignal.set('cancelled');
   }
 
   reset(): void {
-    this.abort = false;
-    this.isPaused = false;
-    this.pausedSignal.set(false);
-    this.resumeWaiters = [];
+    this.stopProgressPolling();
+    this.subscription?.unsubscribe();
+    this.subscription = null;
     this.statusSignal.set('idle');
     this.playlistRunsSignal.set([]);
-    this.itemsSignal.set([]);
-    this.logSignal.set([]);
-    this.currentPlaylistIdSignal.set(null);
     this.startedAtSignal.set(null);
     this.finishedAtSignal.set(null);
+    this.errorMessageSignal.set(null);
   }
 
-  protected trackDelayMs(): number {
-    return TRACK_DELAY_MS;
+  private startProgressPolling(): void {
+    this.stopProgressPolling();
+    this.progressTimer = setInterval(() => {
+      this.nowSignal.set(Date.now());
+      this.transfer.fetchProgress().subscribe({
+        next: (progress) => this.applyProgress(progress),
+        error: () => undefined,
+      });
+    }, PROGRESS_POLL_INTERVAL_MS);
   }
 
-  protected playlistDelayMs(): number {
-    return PLAYLIST_DELAY_MS;
-  }
-
-  protected resultFor(index: number): ItemTransferResult {
-    if (index % 13 === 0) {
-      return 'not_found';
+  private stopProgressPolling(): void {
+    if (this.progressTimer !== null) {
+      clearInterval(this.progressTimer);
+      this.progressTimer = null;
     }
-    if (index % 17 === 0) {
-      return 'skipped';
-    }
-    return 'success';
   }
 
-  protected trackTitleFor(run: PlaylistRun, index: number): string {
-    return `Tema ${index + 1} de ${run.title}`;
-  }
-
-  private async run(runs: readonly PlaylistRun[]): Promise<void> {
-    for (const run of runs) {
-      if (this.abort) {
-        this.finish('cancelled');
-        return;
-      }
-
-      this.currentPlaylistIdSignal.set(run.playlistId);
-      this.updateRun(run.playlistId, { status: 'running' });
-
-      for (let index = 0; index < run.totalTracks; index++) {
-        if (this.abort) {
-          this.finish('cancelled');
-          return;
-        }
-        await this.waitWhilePaused();
-        if (this.abort) {
-          this.finish('cancelled');
-          return;
-        }
-        await delay(this.trackDelayMs());
-        if (this.abort) {
-          this.finish('cancelled');
-          return;
-        }
-
-        const result = this.resultFor(index);
-        const trackId = `${run.playlistId}::track-${index + 1}`;
-        this.recordItem(run, trackId, index, result);
-      }
-
-      await delay(this.playlistDelayMs());
-      if (this.abort) {
-        this.finish('cancelled');
-        return;
-      }
-      this.updateRun(run.playlistId, { status: 'done' });
-    }
-
-    this.finish('completed');
-  }
-
-  private finish(status: TransferStatus): void {
-    this.finishedAtSignal.set(Date.now());
-    this.currentPlaylistIdSignal.set(null);
-    this.statusSignal.set(status);
-  }
-
-  private recordItem(
-    run: PlaylistRun,
-    trackId: string,
-    index: number,
-    result: ItemTransferResult,
-  ): void {
-    const trackTitle = this.trackTitleFor(run, index);
-    const item: ItemTransferProgress = {
-      playlistId: run.playlistId,
-      trackId,
-      trackTitle,
-      result,
-    };
-    this.itemsSignal.update((items) => [...items, item]);
-
-    const current = this.playlistRunsSignal().find(
-      (candidate) => candidate.playlistId === run.playlistId,
-    );
-    const processedTracks = (current?.processedTracks ?? 0) + 1;
-    const patch: Partial<PlaylistRun> = { processedTracks };
-    if (result === 'success') {
-      patch.successCount = (current?.successCount ?? 0) + 1;
-    } else {
-      patch.warningCount = (current?.warningCount ?? 0) + 1;
-    }
-    this.updateRun(run.playlistId, patch);
-
-    this.logSignal.update((log) =>
-      [...log, { time: Date.now(), trackId, playlistTitle: run.title, trackTitle, result }].slice(
-        -MAX_LOG_ENTRIES,
-      ),
-    );
-  }
-
-  private updateRun(playlistId: string, patch: Partial<PlaylistRun>): void {
+  private applyProgress(progress: TransferProgress): void {
     this.playlistRunsSignal.update((runs) =>
-      runs.map((run) => (run.playlistId === playlistId ? { ...run, ...patch } : run)),
+      runs.map((run) => {
+        const entry = progress.find((item) => item.playlist_id === run.playlistId);
+        if (entry === undefined) {
+          return run;
+        }
+        return {
+          ...run,
+          totalTracks: entry.total_tracks > 0 ? entry.total_tracks : run.totalTracks,
+          processedTracks: Math.max(run.processedTracks, entry.processed_tracks),
+          status: entry.processed_tracks > 0 ? ('running' as const) : run.status,
+        };
+      }),
     );
   }
 
-  private async waitWhilePaused(): Promise<void> {
-    while (this.isPaused) {
-      await new Promise<void>((resolve) => this.resumeWaiters.push(resolve));
-    }
+  private complete(result: TransferResponse): void {
+    this.stopProgressPolling();
+    this.playlistRunsSignal.update((runs) => {
+      return runs.map((run) => {
+        const migrated = result.results.find((item) => item.playlist_id === run.playlistId);
+        return {
+          ...run,
+          processedTracks: migrated?.total_tracks ?? 0,
+          successCount: migrated?.successful_tracks ?? 0,
+          warningCount: migrated?.failed_tracks ?? 0,
+          status: 'done' as const,
+        };
+      });
+    });
+    this.finishedAtSignal.set(Date.now());
+    this.statusSignal.set('completed');
   }
-}
 
-function delay(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
+  private fail(error?: unknown): void {
+    this.stopProgressPolling();
+    this.errorMessageSignal.set(this.extractErrorMessage(error));
+    this.finishedAtSignal.set(Date.now());
+    this.statusSignal.set('failed');
+  }
+
+  private extractErrorMessage(error: unknown): string {
+    if (error instanceof HttpErrorResponse) {
+      const body = error.error as {
+        error?: { message?: string };
+        message?: string;
+      } | null;
+      if (body?.error?.message) {
+        return body.error.message;
+      }
+      if (body?.message) {
+        return body.message;
+      }
+      return `El servidor respondió con el código ${error.status}.`;
+    }
+    return 'No se pudo conectar con el servidor.';
+  }
 }

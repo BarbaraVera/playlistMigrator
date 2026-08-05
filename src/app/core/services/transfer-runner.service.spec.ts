@@ -1,30 +1,31 @@
-import { Injectable } from '@angular/core';
+import { HttpErrorResponse } from '@angular/common/http';
 import { fakeAsync, flush, TestBed, tick } from '@angular/core/testing';
+import { of, Subject, throwError } from 'rxjs';
 
+import { PLAYLIST_FIXTURE } from './playlist-selection.fixture';
 import { PlaylistSelectionService } from './playlist-selection.service';
-import { TransferRunnerService } from './transfer-runner.service';
+import { SpotifyPlaylistService } from './spotify-playlist.service';
+import { TransferResponse } from '../models/transfer';
+import { TransferRunnerService, PROGRESS_POLL_INTERVAL_MS } from './transfer-runner.service';
+import { TransferService } from './transfer.service';
 
-@Injectable()
-class InstantRunner extends TransferRunnerService {
-  protected override trackDelayMs(): number {
-    return 0;
-  }
-
-  protected override playlistDelayMs(): number {
-    return 0;
-  }
-}
-
-@Injectable()
-class ControlledRunner extends TransferRunnerService {
-  protected override trackDelayMs(): number {
-    return 100;
-  }
-
-  protected override playlistDelayMs(): number {
-    return 100;
-  }
-}
+const RESPONSE: TransferResponse = {
+  playlists_migrated: 1,
+  total_tracks: 42,
+  successful_tracks: 36,
+  failed_tracks: 6,
+  results: [
+    {
+      playlist_id: 'pl-rock-clasico',
+      title: 'Rock Clásico',
+      youtube_playlist_id: 'yt-1',
+      youtube_url: 'https://music.youtube.com/playlist?list=yt-1',
+      total_tracks: 42,
+      successful_tracks: 36,
+      failed_tracks: 6,
+    },
+  ],
+};
 
 function loadAndSelect(selection: PlaylistSelectionService, ids: readonly string[]): void {
   selection.load();
@@ -35,104 +36,229 @@ function loadAndSelect(selection: PlaylistSelectionService, ids: readonly string
 }
 
 describe('TransferRunnerService', () => {
+  let transferService: jasmine.SpyObj<TransferService>;
+
   beforeEach(() => {
+    TestBed.resetTestingModule();
+    transferService = jasmine.createSpyObj('TransferService', ['migrate', 'fetchProgress']);
+    transferService.fetchProgress.and.returnValue(of([]));
     TestBed.configureTestingModule({
-      providers: [InstantRunner, ControlledRunner],
+      providers: [
+        {
+          provide: SpotifyPlaylistService,
+          useValue: { list: () => Promise.resolve(PLAYLIST_FIXTURE) },
+        },
+        { provide: TransferService, useValue: transferService },
+      ],
     });
   });
 
-  it('completa la migración con el resumen correcto', fakeAsync(() => {
-    const selection = TestBed.inject(PlaylistSelectionService);
-    const runner = TestBed.inject(InstantRunner);
-    loadAndSelect(selection, ['pl-rock-clasico', 'pl-chill-tarde']);
-
-    runner.start();
-    flush(100000);
-
-    expect(runner.status()).toBe('completed');
-    expect(runner.percent()).toBe(100);
-    expect(runner.summary().totalPlaylists).toBe(2);
-    expect(runner.summary().processedTracks).toBe(70);
-    expect(runner.summary().successfulTracks).toBe(60);
-    expect(runner.summary().failedTracks).toBe(10);
-    expect(runner.playlistRuns().every((run) => run.status === 'done')).toBeTrue();
-    expect(runner.log().length).toBe(50);
-    expect(runner.items().length).toBe(70);
-    expect(runner.currentPlaylist()).toBeNull();
-  }));
-
   it('no arranca sin playlists seleccionadas', fakeAsync(() => {
     const selection = TestBed.inject(PlaylistSelectionService);
-    const runner = TestBed.inject(InstantRunner);
+    const runner = TestBed.inject(TransferRunnerService);
     loadAndSelect(selection, []);
 
     runner.start();
     tick();
 
     expect(runner.status()).toBe('idle');
+    expect(transferService.migrate).not.toHaveBeenCalled();
     expect(runner.playlistRuns().length).toBe(0);
-    expect(runner.percent()).toBe(0);
   }));
 
-  it('pausa y reanuda la ejecución', fakeAsync(() => {
+  it('llama al backend y completa con el resumen real', fakeAsync(() => {
     const selection = TestBed.inject(PlaylistSelectionService);
-    const runner = TestBed.inject(ControlledRunner);
+    const runner = TestBed.inject(TransferRunnerService);
     loadAndSelect(selection, ['pl-rock-clasico']);
 
+    transferService.migrate.and.returnValue(of(RESPONSE));
     runner.start();
-    tick(300);
-    expect(runner.processedTracks()).toBeGreaterThan(0);
 
-    runner.pause();
-    expect(runner.paused()).toBeTrue();
-    tick(1000);
-    const pausedCount = runner.processedTracks();
-    tick(1000);
-    expect(runner.processedTracks()).toBe(pausedCount);
-    expect(runner.status()).toBe('in_progress');
-
-    runner.resume();
-    expect(runner.paused()).toBeFalse();
-    tick(6000);
-
+    expect(transferService.migrate).toHaveBeenCalledWith(['pl-rock-clasico']);
     expect(runner.status()).toBe('completed');
+    expect(runner.percent()).toBe(100);
+    expect(runner.totalTracks()).toBe(42);
+    expect(runner.summary().totalPlaylists).toBe(1);
+    expect(runner.summary().processedTracks).toBe(42);
+    expect(runner.summary().successfulTracks).toBe(36);
+    expect(runner.summary().failedTracks).toBe(6);
+
+    const run = runner.playlistRuns()[0];
+    expect(run.status).toBe('done');
+    expect(run.successCount).toBe(36);
+    expect(run.warningCount).toBe(6);
   }));
 
-  it('cancela a mitad de la transferencia', fakeAsync(() => {
+  it('aplica el resultado por playlist a cada run', fakeAsync(() => {
     const selection = TestBed.inject(PlaylistSelectionService);
-    const runner = TestBed.inject(ControlledRunner);
-    loadAndSelect(selection, ['pl-roadtrip-2026']);
+    const runner = TestBed.inject(TransferRunnerService);
+    loadAndSelect(selection, ['pl-rock-clasico', 'pl-chill-tarde']);
 
+    const response: TransferResponse = {
+      playlists_migrated: 2,
+      total_tracks: 70,
+      successful_tracks: 60,
+      failed_tracks: 10,
+      results: [
+        {
+          playlist_id: 'pl-rock-clasico',
+          title: 'Rock Clásico',
+          youtube_playlist_id: 'yt-1',
+          youtube_url: 'https://music.youtube.com/playlist?list=yt-1',
+          total_tracks: 42,
+          successful_tracks: 36,
+          failed_tracks: 6,
+        },
+        {
+          playlist_id: 'pl-chill-tarde',
+          title: 'Chill de Tarde',
+          youtube_playlist_id: 'yt-2',
+          youtube_url: 'https://music.youtube.com/playlist?list=yt-2',
+          total_tracks: 28,
+          successful_tracks: 24,
+          failed_tracks: 4,
+        },
+      ],
+    };
+    transferService.migrate.and.returnValue(of(response));
     runner.start();
-    tick(500);
+    tick();
+
+    const runs = runner.playlistRuns();
+    expect(runs.length).toBe(2);
+    expect(runs.every((run) => run.status === 'done')).toBeTrue();
+    expect(runs[0].processedTracks).toBe(42);
+    expect(runs[1].processedTracks).toBe(28);
+  }));
+
+  it('marca failed cuando el backend devuelve error', fakeAsync(() => {
+    const selection = TestBed.inject(PlaylistSelectionService);
+    const runner = TestBed.inject(TransferRunnerService);
+    loadAndSelect(selection, ['pl-rock-clasico']);
+
+    transferService.migrate.and.returnValue(throwError(() => new Error('API caída')));
+    runner.start();
+    tick();
+
+    expect(runner.status()).toBe('failed');
+    expect(runner.errorMessage()).toBe('No se pudo conectar con el servidor.');
+  }));
+
+  it('expone el mensaje estructurado del backend en el error', fakeAsync(() => {
+    const selection = TestBed.inject(PlaylistSelectionService);
+    const runner = TestBed.inject(TransferRunnerService);
+    loadAndSelect(selection, ['pl-rock-clasico']);
+
+    transferService.migrate.and.returnValue(
+      throwError(
+        () =>
+          new HttpErrorResponse({
+            status: 502,
+            statusText: 'Bad Gateway',
+            error: {
+              playlist_id: 'pl-rock-clasico',
+              error: 'api_error',
+              message: 'The request cannot be completed because you have exceeded your quota.',
+              status_code: 403,
+              status: 'PERMISSION_DENIED',
+              method: 'POST',
+              endpoint: '/youtube/v3/playlistItems',
+            },
+          }),
+      ),
+    );
+    runner.start();
+    tick();
+
+    expect(runner.status()).toBe('failed');
+    expect(runner.errorMessage()).toBe(
+      'The request cannot be completed because you have exceeded your quota.',
+    );
+  }));
+
+  it('cancela la petición en curso', fakeAsync(() => {
+    const selection = TestBed.inject(PlaylistSelectionService);
+    const runner = TestBed.inject(TransferRunnerService);
+    loadAndSelect(selection, ['pl-rock-clasico']);
+
+    const subject = new Subject<TransferResponse>();
+    transferService.migrate.and.returnValue(subject.asObservable());
+    runner.start();
+    tick();
     expect(runner.status()).toBe('in_progress');
 
     runner.cancel();
-    tick(1000);
+    tick();
 
     expect(runner.status()).toBe('cancelled');
-    expect(runner.percent()).toBeLessThan(100);
-    expect(runner.currentPlaylist()).toBeNull();
-    expect(runner.playlistRuns().every((run) => run.status !== 'done')).toBeTrue();
+
+    subject.next(RESPONSE);
+    subject.complete();
+    tick();
+
+    expect(runner.status()).toBe('cancelled');
+  }));
+
+  it('actualiza la barra con el progreso del backend durante la migración', fakeAsync(() => {
+    const selection = TestBed.inject(PlaylistSelectionService);
+    const runner = TestBed.inject(TransferRunnerService);
+    loadAndSelect(selection, ['pl-rock-clasico']);
+
+    const subject = new Subject<TransferResponse>();
+    transferService.migrate.and.returnValue(subject.asObservable());
+    transferService.fetchProgress.and.returnValues(
+      of([{ playlist_id: 'pl-rock-clasico', total_tracks: 42, processed_tracks: 10 }]),
+      of([{ playlist_id: 'pl-rock-clasico', total_tracks: 42, processed_tracks: 25 }]),
+    );
+    runner.start();
+    tick();
+    expect(runner.status()).toBe('in_progress');
+
+    tick(PROGRESS_POLL_INTERVAL_MS);
+    expect(runner.playlistRuns()[0].processedTracks).toBe(10);
+    expect(runner.percent()).toBe(24);
+
+    tick(PROGRESS_POLL_INTERVAL_MS);
+    expect(runner.playlistRuns()[0].processedTracks).toBe(25);
+    expect(runner.percent()).toBe(60);
+
+    runner.cancel();
+    tick();
+    flush();
   }));
 
   it('reinicia el estado tras finalizar', fakeAsync(() => {
     const selection = TestBed.inject(PlaylistSelectionService);
-    const runner = TestBed.inject(InstantRunner);
-    loadAndSelect(selection, ['pl-gym-power']);
+    const runner = TestBed.inject(TransferRunnerService);
+    loadAndSelect(selection, ['pl-rock-clasico']);
 
+    transferService.migrate.and.returnValue(of(RESPONSE));
     runner.start();
-    flush(100000);
+    tick();
     expect(runner.status()).toBe('completed');
 
     runner.reset();
 
     expect(runner.status()).toBe('idle');
     expect(runner.playlistRuns().length).toBe(0);
-    expect(runner.items().length).toBe(0);
-    expect(runner.log().length).toBe(0);
+    expect(runner.totalTracks()).toBe(0);
     expect(runner.percent()).toBe(0);
     expect(runner.summary().totalPlaylists).toBe(0);
-    expect(runner.paused()).toBeFalse();
+  }));
+
+  it('no cancela si no hay migración en curso', fakeAsync(() => {
+    const selection = TestBed.inject(PlaylistSelectionService);
+    const runner = TestBed.inject(TransferRunnerService);
+    loadAndSelect(selection, ['pl-rock-clasico']);
+
+    transferService.migrate.and.returnValue(of(RESPONSE));
+    runner.start();
+    tick();
+
+    runner.cancel();
+
+    expect(runner.status()).toBe('completed');
+
+    flush();
   }));
 });

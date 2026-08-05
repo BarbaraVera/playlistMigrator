@@ -1,73 +1,72 @@
-import { fakeAsync, TestBed, tick } from '@angular/core/testing';
+import { TestBed } from '@angular/core/testing';
+import { of, throwError } from 'rxjs';
 
-import { PlatformProfile } from '../models/platform';
+import { AuthService } from './auth.service';
 import { SpotifyAuthService } from './spotify-auth.service';
 
-class FailingSpotifyAuthService extends SpotifyAuthService {
-  protected override async authenticate(): Promise<PlatformProfile> {
-    throw new Error('Token inválido');
-  }
+class StubAuthService {
+  readonly checkStatus = jasmine.createSpy('checkStatus').and.returnValue(of([]));
+  readonly login = jasmine.createSpy('login');
+  readonly disconnectPlatform = jasmine.createSpy('disconnectPlatform').and.returnValue(of(undefined));
 }
 
 describe('SpotifyAuthService', () => {
   let service: SpotifyAuthService;
+  let auth: StubAuthService;
 
   beforeEach(() => {
-    TestBed.configureTestingModule({});
+    TestBed.configureTestingModule({
+      providers: [{ provide: AuthService, useClass: StubAuthService }],
+    });
     service = TestBed.inject(SpotifyAuthService);
+    auth = TestBed.inject(AuthService) as unknown as StubAuthService;
   });
 
-  it('pasa por connecting y termina connected con perfil', fakeAsync(() => {
-    let result: unknown;
-    service.connect().then((state) => {
-      result = state;
-    });
+  it('expone la plataforma spotify', () => {
+    expect(service.platform).toBe('spotify');
+  });
+
+  it('pasa a connecting y redirige al login de la plataforma', () => {
+    void service.connect();
 
     expect(service.state().status).toBe('connecting');
+    expect(auth.login).toHaveBeenCalledWith('spotify');
+  });
 
-    tick(5000);
+  it('no redirige de nuevo si ya está conectando', () => {
+    void service.connect();
+    void service.connect();
+
+    expect(auth.login).toHaveBeenCalledTimes(1);
+  });
+
+  it('marca connected al refrescar con la plataforma conectada', () => {
+    service.refresh(true);
 
     expect(service.state().status).toBe('connected');
-    expect(service.state().profile?.displayName).toBeTruthy();
-    expect(result).toEqual(service.state());
-  }));
+  });
 
-  it('no vuelve a autenticar si ya está conectado', fakeAsync(() => {
-    void service.connect();
-    tick(5000);
-
-    let calls = 0;
-    void service.connect().then(() => {
-      calls += 1;
-    });
-    tick(5000);
-
-    expect(calls).toBe(1);
-    expect(service.state().status).toBe('connected');
-  }));
-
-  it('desconecta y limpia el perfil', fakeAsync(() => {
-    void service.connect();
-    tick(5000);
-
-    service.disconnect();
+  it('vuelve a disconnected al refrescar sin conexión', () => {
+    service.refresh(true);
+    service.refresh(false);
 
     expect(service.state().status).toBe('disconnected');
-    expect(service.state().profile).toBeUndefined();
-  }));
+  });
 
-  it('captura errores de autenticación', fakeAsync(() => {
-    const failing = new FailingSpotifyAuthService();
-    let result: unknown;
-    void failing.connect().then((state) => {
-      result = state;
-    });
+  it('desconecta vía la API y limpia el estado', async () => {
+    service.refresh(true);
+    await service.disconnect();
 
-    tick(5000);
-
+    expect(auth.disconnectPlatform).toHaveBeenCalledWith('spotify');
     expect(service.state().status).toBe('disconnected');
-    expect(failing.state().status).toBe('error');
-    expect(failing.state().error).toBe('Token inválido');
-    expect(result).toEqual(failing.state());
-  }));
+  });
+
+  it('marca error si la API de desconexión falla', async () => {
+    service.refresh(true);
+    auth.disconnectPlatform.and.returnValue(throwError(() => new Error('fallo')));
+
+    await service.disconnect();
+
+    expect(service.state().status).toBe('error');
+  });
 });

@@ -1,4 +1,7 @@
 <section class="relative mx-auto flex min-h-screen w-full max-w-5xl flex-col px-6 py-12">
+  <div class="relative z-10 mb-6 flex justify-start">
+    <app-back-home />
+  </div>
   <header class="relative z-10 mb-10 text-center">
     <p class="mb-2 inline-flex items-center justify-center gap-2 font-display text-sm uppercase tracking-widest text-ink/60">
       <svg lucideMusic2 [size]="18" aria-hidden="true" />
@@ -22,16 +25,13 @@
     <div class="relative z-10 flex flex-col gap-8">
       <app-cartoony-card [title]="'Progreso general'" [elevated]="true">
         <div class="mb-4 flex items-center justify-between gap-3">
-          <p class="truncate font-display text-xl uppercase">
-            @if (currentPlaylist(); as playlist) {
-              {{ playlist.title }}
-            } @else {
-              Preparando…
-            }
-          </p>
+          <p class="truncate font-display text-xl uppercase">Migrando en el servidor…</p>
           <span class="shrink-0 font-display text-sm uppercase text-ink/50">
             {{ formatElapsed(summary().elapsedMs) }}
           </span>
+        </div>
+        <div class="mb-4 flex flex-col items-center gap-3">
+          <app-cartoony-spinner size="md" label="Creando playlist y añadiendo canciones" />
         </div>
         <app-cartoony-progress-bar
           [progress]="percent()"
@@ -49,10 +49,7 @@
         <app-cartoony-card [title]="'Playlists en proceso'">
           <div class="flex flex-col gap-4">
             @for (run of playlistRuns(); track run.playlistId) {
-              <div
-                class="flex items-center gap-4 rounded-2xl border-4 border-ink bg-white p-3"
-                [class.is-active]="currentPlaylistId() === run.playlistId"
-              >
+              <div class="flex items-center gap-4 rounded-2xl border-4 border-ink bg-surface p-3">
                 <img
                   [src]="run.coverUrl"
                   [alt]="'Portada de ' + run.title"
@@ -61,17 +58,14 @@
                 <div class="min-w-0 flex-1">
                   <p class="truncate font-display text-lg uppercase leading-tight">{{ run.title }}</p>
                   <p class="text-sm text-ink/60">{{ run.processedTracks }} / {{ run.totalTracks }} canciones</p>
-                  <div class="mt-2 h-3 w-full overflow-hidden rounded-full border-2 border-ink bg-white">
+                  <div class="mt-2 h-3 w-full overflow-hidden rounded-full border-2 border-ink bg-surface">
                     <div
                       class="h-full bg-grass transition-all duration-200"
                       [style.width.%]="playlistPercent(run)"
                     ></div>
                   </div>
                   <div class="mt-2 flex flex-wrap items-center gap-2">
-                    <app-cartoony-badge
-                      [status]="runStatusBadge(run)"
-                      [pulse]="run.status === 'running'"
-                    >
+                    <app-cartoony-badge [status]="runStatusBadge(run)">
                       {{ runStatusLabel(run) }}
                     </app-cartoony-badge>
                     <app-cartoony-badge [status]="run.warningCount > 0 ? 'warning' : 'success'">
@@ -85,45 +79,9 @@
         </app-cartoony-card>
       }
 
-      <app-cartoony-card [title]="'Registro de actividad'">
-        @if (log().length === 0) {
-          <p class="text-sm text-ink/50">Esperando la primera canción…</p>
-        } @else {
-          <ul class="flex max-h-56 flex-col gap-1 overflow-y-auto pr-1">
-            @for (entry of log(); track entry.trackId; let last = $last) {
-              <li
-                class="flex items-center gap-2 rounded-xl border-2 border-ink/10 bg-cream/60 px-3 py-2 text-sm"
-                [class.log-latest]="last"
-              >
-                @if (entry.result === 'success') {
-                  <svg lucideCircleCheck class="shrink-0 text-grass" [size]="18" aria-hidden="true" />
-                } @else {
-                  <svg lucideTriangleAlert class="shrink-0 text-tangerine" [size]="18" aria-hidden="true" />
-                }
-                <span class="min-w-0 flex-1 truncate">
-                  <span class="font-semibold">{{ entry.playlistTitle }}</span> · {{ entry.trackTitle }}
-                </span>
-                <app-cartoony-badge [status]="entry.result === 'success' ? 'success' : 'warning'">
-                  {{ resultLabel(entry.result) }}
-                </app-cartoony-badge>
-              </li>
-            }
-          </ul>
-        }
-      </app-cartoony-card>
-
       <div
         class="sticky bottom-4 z-20 flex flex-wrap items-center justify-center gap-4 rounded-3xl border-4 border-ink bg-cream/95 p-4 shadow-game-md backdrop-blur"
       >
-        <app-cartoony-button variant="neutral" size="md" data-test="pause-button" (clicked)="togglePause()">
-          <svg lucidePlay [size]="20" slot="leading" aria-hidden="true" [class.hidden]="!paused()" />
-          <svg lucidePause [size]="20" slot="leading" aria-hidden="true" [class.hidden]="paused()" />
-          @if (paused()) {
-            Reanudar
-          } @else {
-            Pausar
-          }
-        </app-cartoony-button>
         <app-cartoony-button variant="danger" size="md" data-test="cancel-button" (clicked)="cancel()">
           <svg lucideSquare [size]="20" slot="leading" aria-hidden="true" />
           Cancelar transferencia
@@ -131,7 +89,7 @@
       </div>
     </div>
   } @else if (isCompleted()) {
-    <section class="relative z-10 rounded-3xl border-4 border-ink bg-white p-8 text-center shadow-game-lg">
+    <section class="relative z-10 rounded-3xl border-4 border-ink bg-surface p-8 text-center shadow-game-lg">
       <svg
         lucidePartyPopper
         class="mx-auto animate-wiggle text-sun"
@@ -151,19 +109,19 @@
       </p>
 
       <div class="mx-auto mt-8 grid max-w-2xl grid-cols-2 gap-4 sm:grid-cols-4">
-        <div class="rounded-2xl border-4 border-ink bg-sun p-4 shadow-game-xs">
+        <div class="rounded-2xl border-4 border-ink bg-sun p-4 text-outline shadow-game-xs">
           <p class="font-display text-3xl tabular-nums">{{ summary().totalPlaylists }}</p>
           <p class="font-display text-xs uppercase tracking-wider">Playlists</p>
         </div>
-        <div class="rounded-2xl border-4 border-ink bg-sky p-4 shadow-game-xs">
+        <div class="rounded-2xl border-4 border-ink bg-sky p-4 text-outline shadow-game-xs">
           <p class="font-display text-3xl tabular-nums">{{ summary().processedTracks }}</p>
           <p class="font-display text-xs uppercase tracking-wider">Canciones</p>
         </div>
-        <div class="rounded-2xl border-4 border-ink bg-grass p-4 shadow-game-xs">
+        <div class="rounded-2xl border-4 border-ink bg-grass p-4 text-outline shadow-game-xs">
           <p class="font-display text-3xl tabular-nums">{{ summary().successfulTracks }}</p>
           <p class="font-display text-xs uppercase tracking-wider">Éxitos</p>
         </div>
-        <div class="rounded-2xl border-4 border-ink bg-tangerine p-4 shadow-game-xs">
+        <div class="rounded-2xl border-4 border-ink bg-tangerine p-4 text-outline shadow-game-xs">
           <p class="font-display text-3xl tabular-nums">{{ summary().failedTracks }}</p>
           <p class="font-display text-xs uppercase tracking-wider">Avisos</p>
         </div>
@@ -183,14 +141,13 @@
       </div>
     </section>
   } @else if (isCancelled()) {
-    <section class="relative z-10 rounded-3xl border-4 border-ink bg-white p-8 text-center shadow-game-lg">
+    <section class="relative z-10 rounded-3xl border-4 border-ink bg-surface p-8 text-center shadow-game-lg">
       <svg lucideSquare class="mx-auto text-berry" [size]="64" stroke-width="2.5" aria-hidden="true" />
       <h2 class="mt-4 font-display text-3xl uppercase tracking-wide text-berry">
         Transferencia cancelada
       </h2>
       <p class="mx-auto mt-2 max-w-md font-medium text-ink/70">
-        Se procesaron {{ summary().processedTracks }} canciones de {{ totalTracks() }} antes de
-        cancelar.
+        La migración se canceló antes de terminar. Puedes volver a intentarlo desde la selección.
       </p>
       <div class="mt-8">
         <app-cartoony-button variant="secondary" data-test="back-button" (clicked)="goBackToSelection()">
@@ -200,11 +157,18 @@
       </div>
     </section>
   } @else {
-    <section class="relative z-10 rounded-3xl border-4 border-ink bg-white p-8 text-center shadow-game-lg">
+    <section class="relative z-10 rounded-3xl border-4 border-ink bg-surface p-8 text-center shadow-game-lg">
       <h2 class="font-display text-3xl uppercase tracking-wide text-berry">Algo salió mal</h2>
-      <p class="mx-auto mt-2 max-w-md font-medium text-ink/70">Intenta de nuevo desde la selección.</p>
+      <p class="mx-auto mt-2 max-w-md font-medium text-ink/70">
+        No se pudo completar la migración. Intenta de nuevo desde la selección.
+      </p>
+      @if (errorMessage()) {
+        <p class="mx-auto mt-4 max-w-xl break-words rounded-2xl border-2 border-berry/30 bg-berry/10 p-3 font-medium text-berry">
+          {{ errorMessage() }}
+        </p>
+      }
       <div class="mt-8">
-        <app-cartoony-button variant="secondary" (clicked)="goBackToSelection()">
+        <app-cartoony-button variant="secondary" data-test="back-button" (clicked)="goBackToSelection()">
           Volver a selección
         </app-cartoony-button>
       </div>

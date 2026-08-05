@@ -1,4 +1,7 @@
 <section class="relative mx-auto flex min-h-screen w-full max-w-5xl flex-col px-6 py-12">
+  <div class="relative z-10 mb-6 flex justify-start">
+    <app-back-home />
+  </div>
   <header class="relative z-10 mb-10 text-center">
     <p class="mb-2 inline-flex items-center gap-2 font-display text-sm uppercase tracking-widest text-ink/60">
       <svg lucideLibrary [size]="18" aria-hidden="true" />
@@ -9,6 +12,9 @@
     </h1>
     <p class="mx-auto mt-4 max-w-xl text-lg font-medium text-ink/70">
       Marca las playlists de Spotify que quieres llevar a YouTube Music.
+      <span class="font-display text-sm uppercase tracking-wider text-ink/50">
+        (máximo {{ maxSelectable }} por migración)
+      </span>
     </p>
     <div class="mt-6 flex flex-wrap items-center justify-center gap-3">
       <app-cartoony-badge [status]="sourceConnected() ? 'success' : 'error'">
@@ -18,6 +24,12 @@
         YouTube Music {{ destinationConnected() ? 'conectado' : 'sin conectar' }}
       </app-cartoony-badge>
     </div>
+    @if (hasNonMigratable()) {
+      <p class="mx-auto mt-3 max-w-xl text-sm font-medium text-ink/50">
+        Las playlists atenuadas son de otras personas: Spotify ya no permite leer sus canciones,
+        así que no se pueden migrar.
+      </p>
+    }
   </header>
 
   <div class="relative z-10 mb-8">
@@ -37,7 +49,7 @@
         [value]="query()"
         (input)="onSearch($event)"
         placeholder="Ej. Rock, gym, roadtrip…"
-        class="w-full rounded-2xl border-4 border-ink bg-white py-3 pl-12 pr-4 font-body text-lg shadow-game-xs transition-all duration-75 focus:outline-none focus:ring-4 focus:ring-sky/70 placeholder:text-ink/40"
+        class="w-full rounded-2xl border-4 border-ink bg-surface py-3 pl-12 pr-4 font-body text-lg shadow-game-xs transition-all duration-75 focus:outline-none focus:ring-4 focus:ring-sky/70 placeholder:text-ink/40"
       />
     </div>
   </div>
@@ -47,19 +59,19 @@
       <app-cartoony-spinner size="lg" label="Cargando playlists" />
     </div>
   } @else if (status() === 'error') {
-    <div class="relative z-10 flex flex-col items-center gap-4 rounded-3xl border-4 border-ink bg-white py-14 text-center shadow-game-md">
+    <div class="relative z-10 flex flex-col items-center gap-4 rounded-3xl border-4 border-ink bg-surface py-14 text-center shadow-game-md">
       <p class="font-display text-2xl uppercase text-berry">¡Ups! Algo falló</p>
       <p class="max-w-md text-ink/70">{{ error() }}</p>
-      <app-cartoony-button variant="danger" (clicked)="retry()">Reintentar</app-cartoony-button>
+      <app-cartoony-button variant="danger" data-test="retry-button" (clicked)="retry()">Reintentar</app-cartoony-button>
     </div>
   } @else {
     @if (playlists().length === 0) {
-      <div class="relative z-10 rounded-3xl border-4 border-dashed border-ink/20 bg-white/60 py-14 text-center">
+      <div class="relative z-10 rounded-3xl border-4 border-dashed border-ink/20 bg-surface/60 py-14 text-center">
         <p class="font-display text-xl uppercase text-ink/50">Sin resultados para “{{ query() }}”</p>
       </div>
     } @else {
       <div class="relative z-10 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-        @for (playlist of playlists(); track playlist.id) {
+        @for (playlist of sortedVisiblePlaylists(); track playlist.id) {
           <app-cartoony-card
             [title]="''"
             [hoverable]="true"
@@ -67,7 +79,11 @@
           >
             <button
               type="button"
-              class="flex w-full flex-col gap-3 text-left"
+              class="flex w-full cursor-pointer flex-col gap-3 text-left transition-opacity duration-75"
+              [class.opacity-60]="!isSelected(playlist.id) && selectionLimitReached()"
+              [class.opacity-40]="!playlist.migratable"
+              [class.cursor-not-allowed]="!playlist.migratable"
+              [disabled]="!playlist.migratable"
               [attr.aria-pressed]="isSelected(playlist.id) ? 'true' : 'false'"
               (click)="togglePlaylist(playlist.id)"
             >
@@ -81,7 +97,8 @@
                 <span
                   class="absolute -right-2 -top-2 grid h-10 w-10 place-items-center rounded-xl border-4 border-ink shadow-game-xs transition-colors duration-75"
                   [class.bg-sky]="isSelected(playlist.id)"
-                  [class.bg-white]="!isSelected(playlist.id)"
+                  [class.bg-surface]="!isSelected(playlist.id)"
+                  [class.text-outline]="isSelected(playlist.id)"
                 >
                   <svg
                     lucideCheck
@@ -98,14 +115,48 @@
               <span class="text-sm text-ink/60">por {{ playlist.owner }}</span>
             </button>
             <div class="mt-3 flex items-center justify-between gap-2">
-              <app-cartoony-badge status="info">{{ playlist.trackCount }} canciones</app-cartoony-badge>
-              <span class="font-display text-xs uppercase tracking-wider text-ink/40">
-                {{ platformLabel(playlist.platform) }}
+              <span class="flex min-w-0 flex-wrap items-center gap-2">
+                <app-cartoony-badge status="info">{{ playlist.trackCount }} canciones</app-cartoony-badge>
+                @if (!playlist.migratable) {
+                  <app-cartoony-badge status="warning" [title]="migratableHint">No migrable</app-cartoony-badge>
+                }
+              </span>
+              <span class="flex items-center gap-2">
+                <span class="font-display text-xs uppercase tracking-wider text-ink/40">
+                  {{ platformLabel(playlist.platform) }}
+                </span>
+                <button
+                  type="button"
+                  [disabled]="!playlist.migratable"
+                  [attr.aria-label]="playlist.migratable ? 'Ver canciones de ' + playlist.title : migratableHint"
+                  [title]="playlist.migratable ? 'Ver canciones de ' + playlist.title : migratableHint"
+                  class="grid h-9 w-9 shrink-0 cursor-pointer place-items-center rounded-xl border-4 border-ink bg-surface text-ink shadow-game-xs transition-all duration-75 hover:bg-cream focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-sky/70 active:translate-y-[3px] active:shadow-none"
+                  [class.opacity-40]="!playlist.migratable"
+                  [class.cursor-not-allowed]="!playlist.migratable"
+                  (click)="openPreview(playlist)"
+                >
+                  <svg lucideEye [size]="18" aria-hidden="true" />
+                </button>
               </span>
             </div>
           </app-cartoony-card>
         }
       </div>
+      @if (hasMore()) {
+        <div class="relative z-10 mt-10 flex justify-center">
+          <app-cartoony-button variant="secondary" size="md" (clicked)="showMore()">
+            Ver más ({{ hiddenCount() }})
+            <svg lucideChevronDown [size]="20" slot="trailing" aria-hidden="true" />
+          </app-cartoony-button>
+        </div>
+      } @else if (allVisible() && playlists().length > INITIAL_VISIBLE_COUNT) {
+        <div class="relative z-10 mt-10 flex justify-center">
+          <app-cartoony-button variant="neutral" size="md" (clicked)="showLess()">
+            <svg lucideChevronUp [size]="20" slot="leading" aria-hidden="true" />
+            Ver menos
+          </app-cartoony-button>
+        </div>
+      }
     }
   }
 
@@ -118,11 +169,75 @@
         <p class="text-sm text-ink/60">
           {{ selectedCount() }} de {{ totalCount().length }} playlists listas para migrar
         </p>
+        @if (selectionLimitReached()) {
+          <p class="max-w-xs text-sm font-semibold text-tangerine sm:max-w-none">
+            Máximo {{ maxSelectable }} playlists por migración. Desmarca una para elegir otra.
+          </p>
+        }
       </div>
-      <app-cartoony-button size="lg" [disabled]="selectedCount() === 0" (clicked)="continueToTransfer()">
+      <app-cartoony-button size="lg" [disabled]="selectedCount() === 0" (clicked)="requestTransfer()">
         <svg lucideArrowRight [size]="24" slot="leading" aria-hidden="true" />
         ¡Continuar a transferencia!
       </app-cartoony-button>
     </div>
   </footer>
+
+  <app-cartoony-modal [open]="previewOpen()" [title]="previewTitle()" width="lg" (closed)="closePreview()">
+    @if (previewLoading()) {
+      <div class="flex flex-col items-center gap-4 py-10">
+        <app-cartoony-spinner size="md" label="Cargando canciones" />
+      </div>
+    } @else if (previewError()) {
+      <div class="rounded-2xl border-4 border-berry/30 bg-berry/10 p-6 text-center">
+        <p class="font-display text-xl uppercase text-berry">¡Ups! Algo falló</p>
+        <p class="mt-1 text-ink/70">{{ previewError() }}</p>
+      </div>
+    } @else {
+      <ul class="flex flex-col gap-2">
+        @for (track of previewTracks(); track (track.id || index); let index = $index) {
+          <li class="flex items-center gap-3 rounded-2xl border-2 border-ink/20 bg-surface p-2">
+            <span class="w-8 shrink-0 text-center font-display text-sm text-ink/40">{{ index + 1 }}</span>
+            <div class="min-w-0 flex-1">
+              <p class="truncate font-display text-base uppercase leading-tight">{{ track.title }}</p>
+              <p class="truncate text-sm text-ink/60">{{ track.artist }}</p>
+            </div>
+          </li>
+        } @empty {
+          <p class="py-8 text-center text-ink/60">Esta playlist no tiene canciones.</p>
+        }
+      </ul>
+    }
+  </app-cartoony-modal>
+
+  <app-cartoony-modal [open]="confirmOpen()" title="¿Migrar estas playlists?" width="md" (closed)="cancelTransfer()">
+    <div class="flex flex-col gap-4">
+      <p class="text-ink/70">
+        Se copiarán las canciones de estas playlists a YouTube Music:
+      </p>
+      <ul class="flex flex-col gap-2">
+        @for (playlist of selectedPlaylists(); track playlist.id) {
+          <li class="flex items-center gap-3 rounded-2xl border-2 border-ink/20 bg-surface p-2">
+            <img
+              [src]="playlist.coverUrl"
+              [alt]="'Portada de ' + playlist.title"
+              class="h-10 w-10 rounded-lg border-2 border-ink object-cover"
+              loading="lazy"
+            />
+            <div class="min-w-0 flex-1">
+              <p class="truncate font-display text-base uppercase leading-tight">{{ playlist.title }}</p>
+              <p class="text-sm text-ink/60">{{ playlist.trackCount }} canciones</p>
+            </div>
+          </li>
+        }
+      </ul>
+      <p class="text-sm font-semibold text-tangerine">Esta acción no se puede deshacer.</p>
+      <div class="flex flex-wrap justify-end gap-3 pt-2">
+        <app-cartoony-button variant="neutral" (clicked)="cancelTransfer()">Cancelar</app-cartoony-button>
+        <app-cartoony-button variant="primary" (clicked)="confirmTransfer()">
+          <svg lucideArrowRight [size]="20" slot="leading" aria-hidden="true" />
+          Sí, migrar
+        </app-cartoony-button>
+      </div>
+    </div>
+  </app-cartoony-modal>
 </section>

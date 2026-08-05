@@ -6,11 +6,11 @@ export type CartoonyButtonVariant = 'primary' | 'secondary' | 'success' | 'dange
 export type CartoonyButtonSize = 'sm' | 'md' | 'lg';
 
 const VARIANT_CLASSES: Record<CartoonyButtonVariant, string> = {
-  primary: 'bg-sun text-ink hover:brightness-105',
-  secondary: 'bg-sky text-ink hover:brightness-105',
-  success: 'bg-grass text-ink hover:brightness-105',
-  danger: 'bg-berry text-ink hover:brightness-105',
-  neutral: 'bg-white text-ink hover:bg-cream/70',
+  primary: 'bg-sun text-outline hover:brightness-105',
+  secondary: 'bg-sky text-outline hover:brightness-105',
+  success: 'bg-grass text-outline hover:brightness-105',
+  danger: 'bg-berry text-outline hover:brightness-105',
+  neutral: 'bg-surface text-ink hover:bg-cream/70',
 };
 
 const SIZE_CLASSES: Record<CartoonyButtonSize, string> = {
