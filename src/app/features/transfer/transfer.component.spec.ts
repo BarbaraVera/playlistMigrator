@@ -1,26 +1,40 @@
-import { Injectable } from '@angular/core';
+import { provideHttpClient } from '@angular/common/http';
 import { fakeAsync, flush, TestBed, tick } from '@angular/core/testing';
 import { By } from '@angular/platform-browser';
 import { ComponentFixture } from '@angular/core/testing';
 import { Router, provideRouter } from '@angular/router';
+import { of, Subject } from 'rxjs';
 
 import { providePlatformAuthServices } from '../../core/services/platform-auth.providers';
+import { PLAYLIST_FIXTURE } from '../../core/services/playlist-selection.fixture';
 import { PlaylistSelectionService } from '../../core/services/playlist-selection.service';
+import { SpotifyPlaylistService } from '../../core/services/spotify-playlist.service';
+import { TransferResponse } from '../../core/models/transfer';
 import { TransferRunnerService } from '../../core/services/transfer-runner.service';
+import { TransferService } from '../../core/services/transfer.service';
 import { TransferComponent } from './transfer.component';
 
-@Injectable()
-class ControlledRunner extends TransferRunnerService {
-  protected override trackDelayMs(): number {
-    return 100;
-  }
-
-  protected override playlistDelayMs(): number {
-    return 100;
-  }
-}
+const RESPONSE: TransferResponse = {
+  playlists_migrated: 1,
+  total_tracks: 19,
+  successful_tracks: 16,
+  failed_tracks: 3,
+  results: [
+    {
+      playlist_id: 'pl-duermete-bebe',
+      title: 'Dúrmete, Bebé',
+      youtube_playlist_id: 'yt-1',
+      youtube_url: 'https://music.youtube.com/playlist?list=yt-1',
+      total_tracks: 19,
+      successful_tracks: 16,
+      failed_tracks: 3,
+    },
+  ],
+};
 
 describe('TransferComponent', () => {
+  let transferService: jasmine.SpyObj<TransferService>;
+
   function select(ids: readonly string[]): void {
     const selection = TestBed.inject(PlaylistSelectionService);
     selection.load();
@@ -44,13 +58,19 @@ describe('TransferComponent', () => {
   }
 
   beforeEach(async () => {
+    transferService = jasmine.createSpyObj('TransferService', ['migrate', 'fetchProgress']);
+    transferService.fetchProgress.and.returnValue(of([]));
     await TestBed.configureTestingModule({
       imports: [TransferComponent],
       providers: [
         provideRouter([]),
+        provideHttpClient(),
         providePlatformAuthServices(),
-        ControlledRunner,
-        { provide: TransferRunnerService, useExisting: ControlledRunner },
+        {
+          provide: SpotifyPlaylistService,
+          useValue: { list: () => Promise.resolve(PLAYLIST_FIXTURE) },
+        },
+        { provide: TransferService, useValue: transferService },
       ],
     }).compileComponents();
   });
@@ -63,55 +83,45 @@ describe('TransferComponent', () => {
     tick();
 
     expect(navigateSpy).toHaveBeenCalledWith(['/playlist-selection']);
+    expect(transferService.migrate).not.toHaveBeenCalled();
     expect(fixture.nativeElement.textContent).toContain('Paso 3 · Transferencia');
   }));
 
-  it('muestra el progreso y las playlists durante la migración', fakeAsync(() => {
-    select(['pl-rock-clasico', 'pl-chill-tarde']);
+  it('arranca la migración y muestra el progreso', fakeAsync(() => {
+    const subject = new Subject<TransferResponse>();
+    transferService.migrate.and.returnValue(subject.asObservable());
 
+    select(['pl-rock-clasico', 'pl-chill-tarde']);
     const fixture = createFixture();
-    tick(300);
+    tick();
+
+    expect(transferService.migrate).toHaveBeenCalledWith(['pl-rock-clasico', 'pl-chill-tarde']);
 
     const text = fixture.nativeElement.textContent;
     expect(text).toContain('Progreso general');
+    expect(text).toContain('Migrando en el servidor…');
     expect(text).toContain('Playlists en proceso');
     expect(text).toContain('Rock Clásico');
     expect(text).toContain('Chill de Tarde');
-    expect(text).toContain('Registro de actividad');
-    expect(fixture.debugElement.query(By.css('app-cartoony-progress-bar'))).toBeTruthy();
+    expect(text).toContain('Cancelar transferencia');
+    expect(fixture.debugElement.query(By.css('app-cartoony-spinner'))).toBeTruthy();
 
-    flush(200000);
+    subject.complete();
+    flush();
   }));
 
-  it('pausa y reanuda desde la UI', fakeAsync(() => {
+  it('muestra la pantalla final con las métricas reales al terminar', fakeAsync(() => {
+    const subject = new Subject<TransferResponse>();
+    transferService.migrate.and.returnValue(subject.asObservable());
+
     const runner = TestBed.inject(TransferRunnerService);
     select(['pl-duermete-bebe']);
-
     const fixture = createFixture();
-    tick(300);
+    tick();
 
-    clickButton(fixture, 'pause-button');
-    expect(runner.paused()).toBeTrue();
-    expect(fixture.nativeElement.textContent).toContain('Reanudar');
-
-    tick(1000);
-    const pausedCount = runner.processedTracks();
-    tick(1000);
-    expect(runner.processedTracks()).toBe(pausedCount);
-
-    clickButton(fixture, 'pause-button');
-    expect(runner.paused()).toBeFalse();
-    expect(fixture.nativeElement.textContent).toContain('Pausar');
-
-    flush(200000);
-  }));
-
-  it('muestra la pantalla final con el resumen al terminar', fakeAsync(() => {
-    const runner = TestBed.inject(TransferRunnerService);
-    select(['pl-duermete-bebe']);
-
-    const fixture = createFixture();
-    flush(200000);
+    subject.next(RESPONSE);
+    subject.complete();
+    tick();
     fixture.detectChanges();
 
     expect(runner.status()).toBe('completed');
@@ -133,10 +143,15 @@ describe('TransferComponent', () => {
     const navigateSpy = spyOn(router, 'navigate').and.resolveTo(true);
     const selection = TestBed.inject(PlaylistSelectionService);
     const runner = TestBed.inject(TransferRunnerService);
-    select(['pl-gym-power']);
+    const subject = new Subject<TransferResponse>();
+    transferService.migrate.and.returnValue(subject.asObservable());
 
+    select(['pl-gym-power']);
     const fixture = createFixture();
-    flush(200000);
+    tick();
+    subject.next(RESPONSE);
+    subject.complete();
+    tick();
     fixture.detectChanges();
 
     clickButton(fixture, 'migrate-button');
@@ -149,16 +164,34 @@ describe('TransferComponent', () => {
 
   it('cancela la transferencia desde la UI', fakeAsync(() => {
     const runner = TestBed.inject(TransferRunnerService);
-    select(['pl-roadtrip-2026']);
+    const subject = new Subject<TransferResponse>();
+    transferService.migrate.and.returnValue(subject.asObservable());
 
+    select(['pl-roadtrip-2026']);
     const fixture = createFixture();
-    tick(300);
+    tick();
 
     clickButton(fixture, 'cancel-button');
-    flush(200000);
     fixture.detectChanges();
 
     expect(runner.status()).toBe('cancelled');
     expect(fixture.nativeElement.textContent).toContain('Transferencia cancelada');
+  }));
+
+  it('muestra el error cuando el backend falla', fakeAsync(() => {
+    const runner = TestBed.inject(TransferRunnerService);
+    const subject = new Subject<TransferResponse>();
+    transferService.migrate.and.returnValue(subject.asObservable());
+
+    select(['pl-roadtrip-2026']);
+    const fixture = createFixture();
+    tick();
+
+    subject.error(new Error('API caída'));
+    tick();
+    fixture.detectChanges();
+
+    expect(runner.status()).toBe('failed');
+    expect(fixture.nativeElement.textContent).toContain('Algo salió mal');
   }));
 });

@@ -1,4 +1,4 @@
-import { fakeAsync, TestBed, tick } from '@angular/core/testing';
+import { TestBed } from '@angular/core/testing';
 import {
   ActivatedRouteSnapshot,
   GuardResult,
@@ -7,10 +7,17 @@ import {
   UrlTree,
   provideRouter,
 } from '@angular/router';
+import { of } from 'rxjs';
 
+import { AuthService } from '../services/auth.service';
 import { ConnectionManagerService } from '../services/connection-manager.service';
 import { providePlatformAuthServices } from '../services/platform-auth.providers';
 import { requireConnectionsGuard } from './require-connections.guard';
+
+class StubAuthService {
+  readonly checkStatus = jasmine.createSpy('checkStatus').and.returnValue(of([]));
+  readonly login = jasmine.createSpy('login');
+}
 
 describe('requireConnectionsGuard', () => {
   function runGuard(): MaybeAsync<GuardResult> {
@@ -21,7 +28,11 @@ describe('requireConnectionsGuard', () => {
 
   beforeEach(() => {
     TestBed.configureTestingModule({
-      providers: [provideRouter([]), providePlatformAuthServices()],
+      providers: [
+        provideRouter([]),
+        providePlatformAuthServices(),
+        { provide: AuthService, useClass: StubAuthService },
+      ],
     });
   });
 
@@ -31,12 +42,13 @@ describe('requireConnectionsGuard', () => {
     expect((result as UrlTree).toString()).toBe('/connect');
   });
 
-  it('permite el acceso cuando ambas plataformas están conectadas', fakeAsync(() => {
+  it('permite el acceso cuando ambas plataformas están conectadas', async () => {
     const manager = TestBed.inject(ConnectionManagerService);
-    void manager.connectTo('spotify');
-    void manager.connectTo('youtube-music');
-    tick(5000);
+    const auth = TestBed.inject(AuthService) as unknown as StubAuthService;
+    auth.checkStatus.and.returnValue(of(['spotify', 'youtube-music']));
+
+    await manager.refresh();
 
     expect(runGuard()).toBe(true);
-  }));
+  });
 });

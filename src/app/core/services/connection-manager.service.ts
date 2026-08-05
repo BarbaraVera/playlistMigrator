@@ -1,11 +1,14 @@
 import { computed, inject, Injectable } from '@angular/core';
+import { firstValueFrom } from 'rxjs';
 
 import { ConnectionState } from '../models/connection';
 import { PlatformId } from '../models/platform';
+import { AuthService } from './auth.service';
 import { PLATFORM_AUTH_SERVICES } from './platform-auth.providers';
 
 @Injectable({ providedIn: 'root' })
 export class ConnectionManagerService {
+  private readonly authService = inject(AuthService);
   private readonly services = inject(PLATFORM_AUTH_SERVICES);
 
   readonly platforms: readonly PlatformId[] = this.services.map((service) => service.platform);
@@ -25,6 +28,20 @@ export class ConnectionManagerService {
 
   readonly allConnected = computed(() => this.connectedCount() === this.platforms.length);
 
+  async refresh(): Promise<void> {
+    try {
+      const connected = await firstValueFrom(this.authService.checkStatus());
+      const connectedSet = new Set(connected);
+      for (const service of this.services) {
+        service.refresh(connectedSet.has(service.platform));
+      }
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : 'No se pudo consultar el estado de conexión';
+      console.warn(message);
+    }
+  }
+
   async connectTo(platform: PlatformId): Promise<void> {
     const service = this.services.find((candidate) => candidate.platform === platform);
     if (service) {
@@ -32,8 +49,12 @@ export class ConnectionManagerService {
     }
   }
 
-  disconnectFrom(platform: PlatformId): void {
+  async disconnectFrom(platform: PlatformId): Promise<void> {
     const service = this.services.find((candidate) => candidate.platform === platform);
-    service?.disconnect();
+    if (!service) {
+      return;
+    }
+    await service.disconnect();
+    await this.refresh();
   }
 }

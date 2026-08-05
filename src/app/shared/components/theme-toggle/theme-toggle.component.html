@@ -1,0 +1,14 @@
+<button
+  type="button"
+  data-test="theme-toggle"
+  [attr.aria-label]="isDark() ? 'Cambiar a modo claro' : 'Cambiar a modo nocturno'"
+  [title]="isDark() ? 'Modo claro' : 'Modo nocturno'"
+  class="grid h-12 w-12 cursor-pointer place-items-center rounded-xl border-4 border-ink bg-surface text-ink shadow-game-xs transition-all duration-75 hover:brightness-105 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-sky/70 active:translate-y-[3px] active:shadow-none"
+  (click)="toggle()"
+>
+  @if (isDark()) {
+    <svg lucideSun [size]="22" aria-hidden="true" />
+  } @else {
+    <svg lucideMoon [size]="22" aria-hidden="true" />
+  }
+</button>

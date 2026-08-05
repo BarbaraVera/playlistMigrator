@@ -1,3 +1,5 @@
+export { BackHomeComponent } from './back-home/back-home.component';
+export { ThemeToggleComponent } from './theme-toggle/theme-toggle.component';
 export { CartoonyButtonComponent } from './cartoony-button/cartoony-button.component';
 export { CartoonyCardComponent } from './cartoony-card/cartoony-card.component';
 export { CartoonyBadgeComponent } from './cartoony-badge/cartoony-badge.component';

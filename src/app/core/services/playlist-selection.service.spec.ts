@@ -1,20 +1,20 @@
-import { fakeAsync, TestBed, tick } from '@angular/core/testing';
+import { TestBed } from '@angular/core/testing';
 
 import { Playlist } from '../models/playlist';
+import { PLAYLIST_FIXTURE } from './playlist-selection.fixture';
 import { PlaylistSelectionService } from './playlist-selection.service';
 import { SpotifyPlaylistService } from './spotify-playlist.service';
 
-class FailingPlaylistService extends SpotifyPlaylistService {
-  override async list(): Promise<readonly Playlist[]> {
-    throw new Error('API caída');
-  }
-}
-
 describe('PlaylistSelectionService', () => {
   let service: PlaylistSelectionService;
+  let playlistService: jasmine.SpyObj<SpotifyPlaylistService>;
 
   beforeEach(() => {
-    TestBed.configureTestingModule({});
+    TestBed.resetTestingModule();
+    playlistService = jasmine.createSpyObj('SpotifyPlaylistService', ['list']);
+    TestBed.configureTestingModule({
+      providers: [{ provide: SpotifyPlaylistService, useValue: playlistService }],
+    });
     service = TestBed.inject(PlaylistSelectionService);
   });
 
@@ -25,37 +25,45 @@ describe('PlaylistSelectionService', () => {
     expect(service.filteredPlaylists()).toEqual([]);
   });
 
-  it('carga las playlists y marca loaded', fakeAsync(() => {
-    let settled = false;
-    void service.load().then(() => {
-      settled = true;
-    });
+  it('marca loading mientras la petición está en vuelo', async () => {
+    let resolvePlaylists!: (value: readonly Playlist[]) => void;
+    playlistService.list.and.returnValue(
+      new Promise<readonly Playlist[]>((resolve) => {
+        resolvePlaylists = resolve;
+      }),
+    );
 
+    const loading = service.load();
     expect(service.loadState().status).toBe('loading');
 
-    tick(2000);
+    resolvePlaylists(PLAYLIST_FIXTURE);
+    await loading;
 
-    expect(settled).toBe(true);
     expect(service.loadState().status).toBe('loaded');
     expect(service.loadState().count).toBe(8);
     expect(service.playlists().length).toBe(8);
-  }));
+  });
 
-  it('no recarga si ya está loaded', fakeAsync(() => {
-    const playlistService = TestBed.inject(SpotifyPlaylistService);
-    const spy = spyOn(playlistService, 'list').and.callThrough();
+  it('carga las playlists y marca loaded', async () => {
+    playlistService.list.and.resolveTo(PLAYLIST_FIXTURE);
+    await service.load();
 
-    void service.load();
-    tick(2000);
-    void service.load();
-    tick(2000);
+    expect(service.loadState().status).toBe('loaded');
+    expect(service.loadState().count).toBe(8);
+    expect(service.playlists().length).toBe(8);
+  });
 
-    expect(spy).toHaveBeenCalledTimes(1);
-  }));
+  it('no recarga si ya está loaded', async () => {
+    playlistService.list.and.resolveTo(PLAYLIST_FIXTURE);
+    await service.load();
+    await service.load();
 
-  it('filtra por título y por propietario', fakeAsync(() => {
-    void service.load();
-    tick(2000);
+    expect(playlistService.list).toHaveBeenCalledTimes(1);
+  });
+
+  it('filtra por título y por propietario', async () => {
+    playlistService.list.and.resolveTo(PLAYLIST_FIXTURE);
+    await service.load();
 
     service.setQuery('gym');
     expect(service.filteredPlaylists().map((playlist) => playlist.id)).toEqual(['pl-gym-power']);
@@ -65,11 +73,11 @@ describe('PlaylistSelectionService', () => {
 
     service.setQuery('');
     expect(service.filteredPlaylists().length).toBe(8);
-  }));
+  });
 
-  it('selecciona y deselecciona playlists', fakeAsync(() => {
-    void service.load();
-    tick(2000);
+  it('selecciona y deselecciona playlists', async () => {
+    playlistService.list.and.resolveTo(PLAYLIST_FIXTURE);
+    await service.load();
 
     service.toggle('pl-rock-clasico');
     expect(service.isSelected('pl-rock-clasico')).toBe(true);
@@ -82,34 +90,56 @@ describe('PlaylistSelectionService', () => {
     service.toggle('pl-rock-clasico');
     expect(service.isSelected('pl-rock-clasico')).toBe(false);
     expect(service.selectedCount()).toBe(1);
-  }));
+  });
 
-  it('limpia la selección', fakeAsync(() => {
-    void service.load();
-    tick(2000);
+  it('limpia la selección', async () => {
+    playlistService.list.and.resolveTo(PLAYLIST_FIXTURE);
+    await service.load();
 
     service.toggle('pl-rock-clasico');
     service.toggle('pl-gym-power');
     service.clearSelection();
 
     expect(service.selectedCount()).toBe(0);
-  }));
+  });
 
-  it('captura errores de carga', fakeAsync(() => {
-    TestBed.resetTestingModule();
-    TestBed.configureTestingModule({
-      providers: [{ provide: SpotifyPlaylistService, useClass: FailingPlaylistService }],
-    });
-    const failing = TestBed.inject(PlaylistSelectionService);
+  it('no selecciona más allá del máximo por migración', async () => {
+    playlistService.list.and.resolveTo(PLAYLIST_FIXTURE);
+    await service.load();
 
-    let settled = false;
-    void failing.load().then(() => {
-      settled = true;
-    });
-    tick(2000);
+    service.toggle('pl-rock-clasico');
+    service.toggle('pl-gym-power');
+    service.toggle('pl-chill-tarde');
+    expect(service.selectedCount()).toBe(3);
+    expect(service.selectionLimitReached()).toBe(true);
 
-    expect(settled).toBe(true);
-    expect(failing.loadState().status).toBe('error');
-    expect(failing.loadState().error).toBe('API caída');
-  }));
+    service.toggle('pl-roadtrip-2026');
+    expect(service.selectedCount()).toBe(3);
+    expect(service.isSelected('pl-roadtrip-2026')).toBe(false);
+
+    service.toggle('pl-rock-clasico');
+    expect(service.selectedCount()).toBe(2);
+    service.toggle('pl-roadtrip-2026');
+    expect(service.selectedCount()).toBe(3);
+  });
+
+  it('no selecciona playlists no migrables', async () => {
+    const playlists: readonly Playlist[] = [
+      { ...PLAYLIST_FIXTURE[0], id: 'pl-ajena', title: 'Playlist Ajena', migratable: false },
+    ];
+    playlistService.list.and.resolveTo(playlists);
+    await service.load();
+
+    service.toggle('pl-ajena');
+    expect(service.selectedCount()).toBe(0);
+    expect(service.isSelected('pl-ajena')).toBe(false);
+  });
+
+  it('captura errores de carga', async () => {
+    playlistService.list.and.rejectWith(new Error('API caída'));
+    await service.load();
+
+    expect(service.loadState().status).toBe('error');
+    expect(service.loadState().error).toBe('API caída');
+  });
 });

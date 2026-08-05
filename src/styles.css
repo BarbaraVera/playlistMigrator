@@ -16,6 +16,8 @@
   /* Paleta Cartoony */
   --color-ink: #141414;
   --color-cream: #fff6e0;
+  --color-surface: #ffffff;
+  --color-outline: #141414;
   --color-sun: #ffc93c;
   --color-sky: #4cc9f0;
   --color-berry: #ff4d6d;
@@ -111,14 +113,45 @@
   }
 }
 
+/* ==========================================================================
+   Modo nocturno
+   "Tinta clara" sobre papel oscuro: el fondo y las superficies se oscurecen,
+   el color de tinta (texto/bordes) se aclara y los acentos se mantienen vivos.
+   ========================================================================== */
+:root {
+  color-scheme: light;
+}
+
+html.dark {
+  color-scheme: dark;
+
+  --color-ink: #f3ecd9;
+  --color-cream: #121a2e;
+  --color-surface: #1d2842;
+
+  /* Sombras 3D: se mantienen oscuras para conservar el efecto de relieve */
+  --shadow-game-xs: 0 3px 0 rgba(0, 0, 0, 0.6);
+  --shadow-game-sm: 0 5px 0 rgba(0, 0, 0, 0.6);
+  --shadow-game-md: 0 7px 0 rgba(0, 0, 0, 0.6);
+  --shadow-game-lg: 0 10px 0 rgba(0, 0, 0, 0.6);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  body {
+    transition:
+      background-color 0.25s ease,
+      color 0.25s ease;
+  }
+}
+
 @layer utilities {
   /* Contorno tipo cartel para titulares */
   .text-stroke {
-    -webkit-text-stroke: 2px var(--color-ink);
+    -webkit-text-stroke: 2px var(--color-outline);
   }
 
   .game-title-shadow {
-    text-shadow: 3px 3px 0 var(--color-ink);
+    text-shadow: 3px 3px 0 var(--color-outline);
   }
 
   /* Rayas diagonales para barras de progreso en marcha */

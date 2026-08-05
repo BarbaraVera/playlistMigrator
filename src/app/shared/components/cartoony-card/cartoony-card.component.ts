@@ -4,7 +4,7 @@ import { Component, computed, input } from '@angular/core';
 export type CartoonyCardVariant = 'default' | 'pop' | 'accent';
 
 const VARIANT_CLASSES: Record<CartoonyCardVariant, string> = {
-  default: 'bg-white',
+  default: 'bg-surface',
   pop: 'bg-sun',
   accent: 'bg-sky',
 };
@@ -25,6 +25,10 @@ export class CartoonyCardComponent {
 
   protected readonly classes = computed(() => {
     const parts = ['border-4 border-ink rounded-2xl', VARIANT_CLASSES[this.variant()]];
+
+    if (this.variant() !== 'default') {
+      parts.push('text-outline');
+    }
 
     if (this.elevated()) {
       parts.push('shadow-game-lg');

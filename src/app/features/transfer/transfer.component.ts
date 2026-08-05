@@ -2,25 +2,23 @@ import { Component, computed, inject, OnInit } from '@angular/core';
 import { Router } from '@angular/router';
 import {
   LucideArrowRight,
-  LucideCircleCheck,
   LucideExternalLink,
   LucideMusic2,
   LucidePartyPopper,
-  LucidePause,
-  LucidePlay,
   LucideRotateCcw,
   LucideSquare,
-  LucideTriangleAlert,
 } from '@lucide/angular';
 
 import { ConnectionManagerService } from '../../core/services/connection-manager.service';
 import { PlaylistSelectionService } from '../../core/services/playlist-selection.service';
 import { TransferRunnerService } from '../../core/services/transfer-runner.service';
-import { ItemTransferResult, PlaylistRun } from '../../core/models/transfer';
+import { PlaylistRun } from '../../core/models/transfer';
+import { BackHomeComponent } from '../../shared/components/back-home/back-home.component';
 import { CartoonyBadgeComponent } from '../../shared/components/cartoony-badge/cartoony-badge.component';
 import { CartoonyButtonComponent } from '../../shared/components/cartoony-button/cartoony-button.component';
 import { CartoonyCardComponent } from '../../shared/components/cartoony-card/cartoony-card.component';
 import { CartoonyProgressBarComponent } from '../../shared/components/cartoony-progress-bar/cartoony-progress-bar.component';
+import { CartoonySpinnerComponent } from '../../shared/components/cartoony-spinner/cartoony-spinner.component';
 
 @Component({
   selector: 'app-transfer',
@@ -28,20 +26,18 @@ import { CartoonyProgressBarComponent } from '../../shared/components/cartoony-p
   templateUrl: './transfer.component.html',
   styleUrl: './transfer.component.scss',
   imports: [
+    BackHomeComponent,
     CartoonyBadgeComponent,
     CartoonyButtonComponent,
     CartoonyCardComponent,
     CartoonyProgressBarComponent,
+    CartoonySpinnerComponent,
     LucideArrowRight,
-    LucideCircleCheck,
     LucideExternalLink,
     LucideMusic2,
     LucidePartyPopper,
-    LucidePause,
-    LucidePlay,
     LucideRotateCcw,
     LucideSquare,
-    LucideTriangleAlert,
   ],
 })
 export class TransferComponent implements OnInit {
@@ -51,14 +47,11 @@ export class TransferComponent implements OnInit {
   private readonly manager = inject(ConnectionManagerService);
 
   protected readonly status = this.runner.status;
-  protected readonly paused = this.runner.paused;
   protected readonly percent = this.runner.percent;
   protected readonly totalTracks = this.runner.totalTracks;
   protected readonly summary = this.runner.summary;
   protected readonly playlistRuns = this.runner.playlistRuns;
-  protected readonly log = this.runner.log;
-  protected readonly currentPlaylistId = this.runner.currentPlaylistId;
-  protected readonly currentPlaylist = this.runner.currentPlaylist;
+  protected readonly errorMessage = this.runner.errorMessage;
   protected readonly states = this.manager.states;
 
   protected readonly isInProgress = computed(() => this.status() === 'in_progress');
@@ -72,14 +65,6 @@ export class TransferComponent implements OnInit {
     }
     if (this.runner.status() === 'idle') {
       this.runner.start();
-    }
-  }
-
-  protected togglePause(): void {
-    if (this.runner.paused()) {
-      this.runner.resume();
-    } else {
-      this.runner.pause();
     }
   }
 
@@ -126,17 +111,6 @@ export class TransferComponent implements OnInit {
         return 'En proceso';
       default:
         return 'En cola';
-    }
-  }
-
-  protected resultLabel(result: ItemTransferResult): string {
-    switch (result) {
-      case 'success':
-        return 'Ok';
-      case 'not_found':
-        return 'No encontrada';
-      case 'skipped':
-        return 'Omitida';
     }
   }
 

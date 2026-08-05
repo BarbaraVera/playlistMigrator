@@ -38,6 +38,32 @@ export interface TransferLogEntry {
   result: ItemTransferResult;
 }
 
+export interface TransferPlaylistResult {
+  playlist_id: string;
+  title: string;
+  youtube_playlist_id: string;
+  youtube_url: string;
+  total_tracks: number;
+  successful_tracks: number;
+  failed_tracks: number;
+}
+
+export interface TransferResponse {
+  playlists_migrated: number;
+  total_tracks: number;
+  successful_tracks: number;
+  failed_tracks: number;
+  results: readonly TransferPlaylistResult[];
+}
+
+export interface TransferProgressPlaylist {
+  playlist_id: string;
+  total_tracks: number;
+  processed_tracks: number;
+}
+
+export type TransferProgress = readonly TransferProgressPlaylist[];
+
 export const EMPTY_TRANSFER_SUMMARY: TransferSummary = Object.freeze({
   totalPlaylists: 0,
   processedTracks: 0,

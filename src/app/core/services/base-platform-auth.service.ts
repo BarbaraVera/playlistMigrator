@@ -1,16 +1,16 @@
-import { Injectable, signal } from '@angular/core';
+import { inject, Injectable, signal } from '@angular/core';
+import { firstValueFrom } from 'rxjs';
 
 import { CONNECTION_DISCONNECTED, ConnectionState } from '../models/connection';
 import { PlatformId } from '../models/platform';
-import { PlatformProfile } from '../models/platform';
+import { AuthService } from './auth.service';
 import { PlatformAuthService } from './platform-auth.service';
 
 @Injectable()
 export abstract class BasePlatformAuthService implements PlatformAuthService {
   abstract readonly platform: PlatformId;
-  protected abstract readonly delayMs: number;
-  protected abstract authenticate(): Promise<PlatformProfile>;
 
+  private readonly authService = inject(AuthService);
   private readonly stateSignal = signal<ConnectionState>(CONNECTION_DISCONNECTED);
 
   readonly state = this.stateSignal.asReadonly();
@@ -22,25 +22,23 @@ export abstract class BasePlatformAuthService implements PlatformAuthService {
     }
 
     this.stateSignal.set({ status: 'connecting' });
+    this.authService.login(this.platform);
+    return this.stateSignal();
+  }
 
+  async disconnect(): Promise<void> {
     try {
-      await delay(this.delayMs);
-      const profile = await this.authenticate();
-      const connected: ConnectionState = { status: 'connected', profile };
-      this.stateSignal.set(connected);
-      return connected;
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Error desconocido';
-      this.stateSignal.set({ status: 'error', error: message });
-      return this.stateSignal();
+      await firstValueFrom(this.authService.disconnectPlatform(this.platform));
+      this.stateSignal.set(CONNECTION_DISCONNECTED);
+    } catch {
+      this.stateSignal.set({
+        status: 'error',
+        error: 'No se pudo desconectar la cuenta.',
+      });
     }
   }
 
-  disconnect(): void {
-    this.stateSignal.set(CONNECTION_DISCONNECTED);
+  refresh(connected: boolean): void {
+    this.stateSignal.set(connected ? { status: 'connected' } : CONNECTION_DISCONNECTED);
   }
-}
-
-function delay(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
 }

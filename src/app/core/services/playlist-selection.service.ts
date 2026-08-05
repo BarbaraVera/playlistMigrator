@@ -3,6 +3,8 @@ import { computed, inject, Injectable, signal } from '@angular/core';
 import { PLAYLIST_LOAD_IDLE, Playlist, PlaylistLoadState } from '../models/playlist';
 import { SpotifyPlaylistService } from './spotify-playlist.service';
 
+export const MAX_SELECTABLE_PLAYLISTS = 3;
+
 @Injectable({ providedIn: 'root' })
 export class PlaylistSelectionService {
   private readonly playlistService = inject(SpotifyPlaylistService);
@@ -31,6 +33,10 @@ export class PlaylistSelectionService {
 
   readonly selectedCount = computed(() => this.selectedIdsSignal().length);
 
+  readonly selectionLimitReached = computed(
+    () => this.selectedIdsSignal().length >= MAX_SELECTABLE_PLAYLISTS,
+  );
+
   readonly selectedPlaylists = computed(() => {
     return this.playlistsSignal().filter((playlist) => this.selectedIdsSignal().includes(playlist.id));
   });
@@ -58,8 +64,16 @@ export class PlaylistSelectionService {
   }
 
   toggle(id: string): void {
+    const playlist = this.playlistsSignal().find((candidate) => candidate.id === id);
+    if (!playlist || !playlist.migratable) {
+      return;
+    }
     const current = this.selectedIdsSignal();
-    const next = current.includes(id)
+    const isSelected = current.includes(id);
+    if (!isSelected && current.length >= MAX_SELECTABLE_PLAYLISTS) {
+      return;
+    }
+    const next = isSelected
       ? current.filter((candidate) => candidate !== id)
       : [...current, id];
     this.selectedIdsSignal.set(next);

@@ -1,16 +1,29 @@
-import { fakeAsync, TestBed, tick } from '@angular/core/testing';
+import { TestBed } from '@angular/core/testing';
+import { of } from 'rxjs';
 
+import { AuthService } from './auth.service';
 import { ConnectionManagerService } from './connection-manager.service';
 import { providePlatformAuthServices } from './platform-auth.providers';
 
+class StubAuthService {
+  readonly checkStatus = jasmine.createSpy('checkStatus').and.returnValue(of([]));
+  readonly login = jasmine.createSpy('login');
+  readonly disconnectPlatform = jasmine.createSpy('disconnectPlatform').and.returnValue(of(undefined));
+}
+
 describe('ConnectionManagerService', () => {
   let service: ConnectionManagerService;
+  let auth: StubAuthService;
 
   beforeEach(() => {
     TestBed.configureTestingModule({
-      providers: [providePlatformAuthServices()],
+      providers: [
+        providePlatformAuthServices(),
+        { provide: AuthService, useClass: StubAuthService },
+      ],
     });
     service = TestBed.inject(ConnectionManagerService);
+    auth = TestBed.inject(AuthService) as unknown as StubAuthService;
   });
 
   it('expone ambas plataformas', () => {
@@ -24,41 +37,29 @@ describe('ConnectionManagerService', () => {
     expect(service.allConnected()).toBe(false);
   });
 
-  it('conecta una plataforma y actualiza el estado', fakeAsync(() => {
-    let settled = false;
-    void service.connectTo('spotify').then(() => {
-      settled = true;
-    });
+  it('conecta una plataforma marcando connecting y redirige al login', () => {
+    void service.connectTo('spotify');
 
     expect(service.states().spotify.status).toBe('connecting');
-    expect(service.connectedCount()).toBe(0);
+    expect(auth.login).toHaveBeenCalledWith('spotify');
+  });
 
-    tick(5000);
+  it('refresca el estado con las plataformas conectadas en el backend', async () => {
+    auth.checkStatus.and.returnValue(of(['spotify', 'youtube-music']));
 
-    expect(settled).toBe(true);
+    await service.refresh();
+
     expect(service.states().spotify.status).toBe('connected');
-    expect(service.states().spotify.profile?.displayName).toBeTruthy();
-    expect(service.connectedCount()).toBe(1);
-    expect(service.allConnected()).toBe(false);
-  }));
-
-  it('allConnected se cumple cuando ambas plataformas están conectadas', fakeAsync(() => {
-    void service.connectTo('spotify');
-    void service.connectTo('youtube-music');
-
-    tick(5000);
-
+    expect(service.states()['youtube-music'].status).toBe('connected');
     expect(service.connectedCount()).toBe(2);
     expect(service.allConnected()).toBe(true);
-  }));
+  });
 
-  it('desconecta una plataforma y la devuelve a disconnected', fakeAsync(() => {
-    void service.connectTo('spotify');
-    tick(5000);
+  it('desconecta una plataforma vía la API y la devuelve a disconnected', async () => {
+    await service.disconnectFrom('spotify');
 
-    service.disconnectFrom('spotify');
-
+    expect(auth.disconnectPlatform).toHaveBeenCalledWith('spotify');
     expect(service.states().spotify.status).toBe('disconnected');
     expect(service.connectedCount()).toBe(0);
-  }));
+  });
 });

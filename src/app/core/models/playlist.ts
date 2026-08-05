@@ -14,6 +14,7 @@ export interface Playlist {
   coverUrl: string;
   trackCount: number;
   owner: string;
+  migratable: boolean;
   platform: PlatformId;
   description?: string;
   tracks?: readonly Track[];

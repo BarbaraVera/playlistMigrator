@@ -65,7 +65,7 @@ describe('CartoonyModalComponent', () => {
     let closed = false;
     component.closed.subscribe(() => (closed = true));
 
-    const backdrop = fixture.debugElement.query(By.css('.bg-ink\\/70')).nativeElement;
+    const backdrop = fixture.debugElement.query(By.css('.bg-outline\\/70')).nativeElement;
     backdrop.click();
     expect(closed).toBe(true);
   });

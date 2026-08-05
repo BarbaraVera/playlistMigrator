@@ -12,6 +12,22 @@
     href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&family=Luckiest+Guy&display=swap"
     rel="stylesheet"
   >
+  <script>
+    (function () {
+      try {
+        var stored = localStorage.getItem('playlist-migrator:theme');
+        var dark =
+          stored === 'dark' ||
+          (stored !== 'light' &&
+            window.matchMedia('(prefers-color-scheme: dark)').matches);
+        if (dark) {
+          document.documentElement.classList.add('dark');
+        }
+      } catch (error) {
+        /* sin almacenamiento disponible: se queda con el tema claro */
+      }
+    })();
+  </script>
 </head>
 <body>
   <app-root></app-root>

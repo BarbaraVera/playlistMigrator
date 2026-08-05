@@ -7,5 +7,6 @@ export interface PlatformAuthService {
   readonly platform: PlatformId;
   readonly state: Signal<ConnectionState>;
   connect(): Promise<ConnectionState>;
-  disconnect(): void;
+  disconnect(): Promise<void>;
+  refresh(connected: boolean): void;
 }
